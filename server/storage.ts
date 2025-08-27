@@ -3,6 +3,7 @@ import {
   submissions, 
   magicLinks,
   anonymousSessions,
+  classSessions,
   type Course, 
   type InsertCourse,
   type Submission,
@@ -11,6 +12,8 @@ import {
   type InsertMagicLink,
   type AnonymousSession,
   type InsertAnonymousSession,
+  type ClassSession,
+  type InsertClassSession,
   type SubmissionWithCourse,
   type ConfusionPattern
 } from "@shared/schema";
@@ -39,6 +42,14 @@ export interface IStorage {
   getAnonymousSession(token: string): Promise<AnonymousSession | undefined>;
   createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession>;
   updateAnonymousSessionLastUsed(id: string): Promise<void>;
+
+  // Class Sessions (Daily Links)
+  getClassSessions(courseId: string): Promise<ClassSession[]>;
+  getActiveClassSession(courseId: string, date?: Date): Promise<ClassSession | undefined>;
+  createClassSession(session: InsertClassSession): Promise<ClassSession>;
+  deactivateExpiredSessions(): Promise<void>;
+  updateCourse(id: string, updates: Partial<InsertCourse>): Promise<Course | undefined>;
+  deleteCourse(id: string): Promise<boolean>;
 
   // Analytics
   getSubmissionStats(): Promise<{
@@ -270,6 +281,81 @@ export class DatabaseStorage implements IStorage {
     return Array.from(patternMap.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
+  }
+
+  // Class Sessions (Daily Links) Implementation
+  async getClassSessions(courseId: string): Promise<ClassSession[]> {
+    return await db
+      .select()
+      .from(classSessions)
+      .where(eq(classSessions.courseId, courseId))
+      .orderBy(desc(classSessions.sessionDate));
+  }
+
+  async getActiveClassSession(courseId: string, date?: Date): Promise<ClassSession | undefined> {
+    const now = date || new Date();
+    const [session] = await db
+      .select()
+      .from(classSessions)
+      .where(
+        and(
+          eq(classSessions.courseId, courseId),
+          eq(classSessions.isActive, true),
+          gte(classSessions.expiresAt, now)
+        )
+      )
+      .orderBy(desc(classSessions.sessionDate))
+      .limit(1);
+    return session || undefined;
+  }
+
+  async createClassSession(insertSession: InsertClassSession): Promise<ClassSession> {
+    // Generate unique access token
+    const accessToken = randomUUID().replace(/-/g, '').substring(0, 12);
+    
+    // Set expiration to end of day if not provided
+    const sessionDate = new Date(insertSession.sessionDate);
+    const expiresAt = insertSession.expiresAt || new Date(sessionDate);
+    expiresAt.setHours(23, 59, 59, 999); // End of day
+
+    const [session] = await db
+      .insert(classSessions)
+      .values({
+        ...insertSession,
+        accessToken,
+        expiresAt,
+      })
+      .returning();
+    return session;
+  }
+
+  async deactivateExpiredSessions(): Promise<void> {
+    const now = new Date();
+    await db
+      .update(classSessions)
+      .set({ isActive: false })
+      .where(
+        and(
+          eq(classSessions.isActive, true),
+          sql`${classSessions.expiresAt} < ${now}`
+        )
+      );
+  }
+
+  async updateCourse(id: string, updates: Partial<InsertCourse>): Promise<Course | undefined> {
+    const [updatedCourse] = await db
+      .update(courses)
+      .set(updates)
+      .where(eq(courses.id, id))
+      .returning();
+    return updatedCourse || undefined;
+  }
+
+  async deleteCourse(id: string): Promise<boolean> {
+    const result = await db
+      .delete(courses)
+      .where(eq(courses.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 }
 

@@ -48,6 +48,17 @@ export const magicLinks = pgTable("magic_links", {
   lastUsedAt: timestamp("last_used_at"),
 });
 
+// Daily class sessions with expiring links
+export const classSessions = pgTable("class_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull().references(() => courses.id),
+  sessionDate: timestamp("session_date").notNull(), // Date of the class
+  accessToken: text("access_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(), // End of day expiration
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const submissionsRelations = relations(submissions, ({ one }) => ({
   course: one(courses, {
     fields: [submissions.courseId],
@@ -65,6 +76,7 @@ export const submissionsRelations = relations(submissions, ({ one }) => ({
 
 export const coursesRelations = relations(courses, ({ many }) => ({
   submissions: many(submissions),
+  classSessions: many(classSessions),
 }));
 
 export const magicLinksRelations = relations(magicLinks, ({ many }) => ({
@@ -73,6 +85,13 @@ export const magicLinksRelations = relations(magicLinks, ({ many }) => ({
 
 export const anonymousSessionsRelations = relations(anonymousSessions, ({ many }) => ({
   submissions: many(submissions),
+}));
+
+export const classSessionsRelations = relations(classSessions, ({ one }) => ({
+  course: one(courses, {
+    fields: [classSessions.courseId],
+    references: [courses.id],
+  }),
 }));
 
 // Insert schemas
@@ -102,6 +121,12 @@ export const insertAnonymousSessionSchema = createInsertSchema(anonymousSessions
   lastUsedAt: true,
 });
 
+export const insertClassSessionSchema = createInsertSchema(classSessions).omit({
+  id: true,
+  createdAt: true,
+  accessToken: true,
+});
+
 // Types
 export type Course = typeof courses.$inferSelect;
 export type InsertCourse = z.infer<typeof insertCourseSchema>;
@@ -111,6 +136,8 @@ export type MagicLink = typeof magicLinks.$inferSelect;
 export type InsertMagicLink = z.infer<typeof insertMagicLinkSchema>;
 export type AnonymousSession = typeof anonymousSessions.$inferSelect;
 export type InsertAnonymousSession = z.infer<typeof insertAnonymousSessionSchema>;
+export type ClassSession = typeof classSessions.$inferSelect;
+export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
 
 // Extended types for frontend
 export type SubmissionWithCourse = Submission & {

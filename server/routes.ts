@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema } from "@shared/schema";
+import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -37,6 +37,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ error: "Failed to create course" });
       }
+    }
+  });
+
+  app.put("/api/courses/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = insertCourseSchema.partial().parse(req.body);
+      const course = await storage.updateCourse(id, data);
+      if (course) {
+        res.json(course);
+      } else {
+        res.status(404).json({ error: "Course not found" });
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to update course" });
+      }
+    }
+  });
+
+  app.delete("/api/courses/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteCourse(id);
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ error: "Course not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete course" });
     }
   });
 
@@ -109,6 +142,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch magic link data" });
+    }
+  });
+
+  // Class Sessions (Daily Links)
+  app.get("/api/courses/:courseId/sessions", async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      const sessions = await storage.getClassSessions(courseId);
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch class sessions" });
+    }
+  });
+
+  app.get("/api/courses/:courseId/active-session", async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      const session = await storage.getActiveClassSession(courseId);
+      res.json(session || null);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch active session" });
+    }
+  });
+
+  app.post("/api/courses/:courseId/sessions", async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      const sessionDate = new Date();
+      
+      // Check if there's already an active session for today
+      const existingSession = await storage.getActiveClassSession(courseId, sessionDate);
+      if (existingSession) {
+        res.json(existingSession);
+        return;
+      }
+
+      const sessionData = insertClassSessionSchema.parse({
+        courseId,
+        sessionDate,
+        isActive: true,
+        expiresAt: new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate(), 23, 59, 59)
+      });
+      
+      const session = await storage.createClassSession(sessionData);
+      res.status(201).json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create class session" });
+      }
+    }
+  });
+
+  // Public route for students to access via session token
+  app.get("/class/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Deactivate expired sessions first
+      await storage.deactivateExpiredSessions();
+      
+      // Find active session by token
+      const sessions = await storage.getClassSessions("");
+      const session = sessions.find(s => s.accessToken === token && s.isActive && s.expiresAt > new Date());
+      
+      if (!session) {
+        res.status(404).json({ error: "Session not found or expired" });
+        return;
+      }
+
+      const course = await storage.getCourse(session.courseId);
+      if (!course) {
+        res.status(404).json({ error: "Course not found" });
+        return;
+      }
+
+      // Redirect to submission page with course pre-selected
+      res.redirect(`/submit?courseId=${course.id}`);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to access class session" });
     }
   });
 
