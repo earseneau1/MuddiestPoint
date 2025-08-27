@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema } from "@shared/schema";
+import { generateFeedbackSuggestions, improveFeedbackText } from "./openai";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -219,8 +220,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      // Redirect to submission page with course pre-selected
-      res.redirect(`/submit?courseId=${course.id}`);
+      // Redirect to class session page with course pre-selected
+      res.redirect(`/class-session?courseId=${course.id}`);
     } catch (error) {
       res.status(500).json({ error: "Failed to access class session" });
     }
@@ -243,6 +244,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(patterns);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch confusion patterns" });
+    }
+  });
+
+  // AI-powered feedback assistance
+  app.post("/api/ai/feedback-suggestions", async (req, res) => {
+    try {
+      const { topic, confusionLevel } = req.body;
+      
+      if (!topic || !confusionLevel) {
+        res.status(400).json({ error: "Topic and confusion level are required" });
+        return;
+      }
+
+      const suggestions = await generateFeedbackSuggestions(topic, confusionLevel);
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("Error generating suggestions:", error);
+      res.status(500).json({ error: "Failed to generate suggestions" });
+    }
+  });
+
+  app.post("/api/ai/improve-feedback", async (req, res) => {
+    try {
+      const { text, topic } = req.body;
+      
+      if (!text || !topic) {
+        res.status(400).json({ error: "Text and topic are required" });
+        return;
+      }
+
+      const improvedText = await improveFeedbackText(text, topic);
+      res.json({ improvedText });
+    } catch (error) {
+      console.error("Error improving feedback:", error);
+      res.status(500).json({ error: "Failed to improve feedback" });
     }
   });
 

@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Submit from "@/pages/submit";
 import ProfessorDashboard from "@/pages/professor-dashboard";
 import Professor from "@/pages/professor";
+import ClassSession from "@/pages/class-session";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -14,6 +15,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/submit" component={Submit} />
+      <Route path="/class-session" component={ClassSession} />
       <Route path="/professor" component={Professor} />
       <Route path="/professor/dashboard" component={ProfessorDashboard} />
       <Route path="/track/:token" component={Submit} />
