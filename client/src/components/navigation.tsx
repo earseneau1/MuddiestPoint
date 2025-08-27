@@ -24,9 +24,18 @@ export default function Navigation() {
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 location === "/" ? "text-primary font-semibold" : "text-foreground hover:text-primary"
               }`}
-              data-testid="nav-student-view"
+              data-testid="nav-home"
             >
-              Student View
+              Home
+            </Link>
+            <Link 
+              href="/submit" 
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                location === "/submit" ? "text-primary font-semibold" : "text-foreground hover:text-primary"
+              }`}
+              data-testid="nav-submit"
+            >
+              Submit Feedback
             </Link>
             <Link 
               href="/professor" 
@@ -65,9 +74,19 @@ export default function Navigation() {
                   location === "/" ? "text-primary font-semibold" : "text-foreground hover:text-primary"
                 }`}
                 onClick={() => setMobileMenuOpen(false)}
-                data-testid="mobile-nav-student-view"
+                data-testid="mobile-nav-home"
               >
-                Student View
+                Home
+              </Link>
+              <Link 
+                href="/submit" 
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  location === "/submit" ? "text-primary font-semibold" : "text-foreground hover:text-primary"
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+                data-testid="mobile-nav-submit"
+              >
+                Submit Feedback
               </Link>
               <Link 
                 href="/professor" 
