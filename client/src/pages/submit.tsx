@@ -1,9 +1,23 @@
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import Navigation from "@/components/navigation";
 import StudentSubmissionForm from "@/components/student-submission-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Shield, KeyRound, Lock, Heart } from "lucide-react";
 
 export default function Submit() {
+  const [location] = useLocation();
+  const [preselectedCourseId, setPreselectedCourseId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    // Parse courseId from URL query parameters
+    const urlParams = new URLSearchParams(location.split('?')[1]);
+    const courseId = urlParams.get('courseId');
+    if (courseId) {
+      setPreselectedCourseId(courseId);
+    }
+  }, [location]);
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -38,7 +52,7 @@ export default function Submit() {
 
         {/* Submission Form */}
         <section className="max-w-2xl mx-auto">
-          <StudentSubmissionForm />
+          <StudentSubmissionForm preselectedCourseId={preselectedCourseId} />
         </section>
 
         {/* Privacy Footer */}

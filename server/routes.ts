@@ -8,10 +8,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Courses
   app.get("/api/courses", async (req, res) => {
     try {
+      const { code } = req.query;
       const courses = await storage.getCourses();
-      res.json(courses);
+      
+      // Filter by course code if provided
+      if (code && typeof code === 'string') {
+        const filteredCourses = courses.filter(course => 
+          course.code.toLowerCase() === code.toLowerCase()
+        );
+        res.json(filteredCourses);
+      } else {
+        res.json(courses);
+      }
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch courses" });
+      console.error("Error fetching courses:", error);
+      res.status(500).json({ message: "Failed to fetch courses" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,7 +29,11 @@ const submissionSchema = z.object({
 
 type SubmissionData = z.infer<typeof submissionSchema>;
 
-export default function StudentSubmissionForm() {
+interface StudentSubmissionFormProps {
+  preselectedCourseId?: string | null;
+}
+
+export default function StudentSubmissionForm({ preselectedCourseId }: StudentSubmissionFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -47,6 +51,16 @@ export default function StudentSubmissionForm() {
       createMagicLink: false,
     },
   });
+
+  // Pre-select course if courseId is provided via URL
+  useEffect(() => {
+    if (preselectedCourseId && courses.length > 0) {
+      const courseExists = courses.find(course => course.id === preselectedCourseId);
+      if (courseExists) {
+        form.setValue('courseId', preselectedCourseId);
+      }
+    }
+  }, [preselectedCourseId, courses, form]);
 
   const submitMutation = useMutation({
     mutationFn: async (data: SubmissionData) => {

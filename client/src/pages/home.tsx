@@ -1,7 +1,11 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Shield, 
   MessageCircle, 
@@ -13,10 +17,50 @@ import {
   ArrowRight,
   BookOpen,
   Target,
-  Lightbulb
+  Lightbulb,
+  Search
 } from "lucide-react";
 
 export default function Home() {
+  const [courseCode, setCourseCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const handleCourseCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!courseCode.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/courses?code=${encodeURIComponent(courseCode.trim())}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch courses');
+      }
+      const courses = await response.json();
+      
+      if (courses.length === 0) {
+        toast({
+          title: "Course not found",
+          description: `No course found with code "${courseCode.trim()}". Please check the course code and try again.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Navigate to submit page with the course ID
+      setLocation(`/submit?courseId=${courses[0].id}`);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to find course. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -33,6 +77,27 @@ export default function Home() {
             Muddiest Point empowers students to share confusion anonymously while giving professors 
             real-time insights to improve teaching effectiveness throughout the semester.
           </p>
+          
+          {/* Quick Course Access */}
+          <div className="bg-card/50 rounded-lg p-6 mb-8 max-w-md mx-auto border">
+            <h3 className="text-lg font-serif font-semibold mb-3">Quick Course Access</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Enter your course code to jump directly to feedback submission
+            </p>
+            <form onSubmit={handleCourseCodeSubmit} className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="e.g., CS101, MATH200"
+                value={courseCode}
+                onChange={(e) => setCourseCode(e.target.value)}
+                className="flex-1"
+                data-testid="input-course-code"
+              />
+              <Button type="submit" disabled={isLoading || !courseCode.trim()} data-testid="button-course-lookup">
+                <Search className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
             <Link href="/submit">
