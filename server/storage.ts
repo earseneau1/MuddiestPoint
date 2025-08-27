@@ -2,12 +2,15 @@ import {
   courses, 
   submissions, 
   magicLinks,
+  anonymousSessions,
   type Course, 
   type InsertCourse,
   type Submission,
   type InsertSubmission,
   type MagicLink,
   type InsertMagicLink,
+  type AnonymousSession,
+  type InsertAnonymousSession,
   type SubmissionWithCourse,
   type ConfusionPattern
 } from "@shared/schema";
@@ -31,6 +34,11 @@ export interface IStorage {
   getMagicLink(token: string): Promise<MagicLink | undefined>;
   createMagicLink(magicLink: InsertMagicLink): Promise<MagicLink>;
   updateMagicLinkLastUsed(id: string): Promise<void>;
+
+  // Anonymous Sessions (privacy-first)
+  getAnonymousSession(token: string): Promise<AnonymousSession | undefined>;
+  createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession>;
+  updateAnonymousSessionLastUsed(id: string): Promise<void>;
 
   // Analytics
   getSubmissionStats(): Promise<{
@@ -68,6 +76,7 @@ export class DatabaseStorage implements IStorage {
         confusion: submissions.confusion,
         difficultyLevel: submissions.difficultyLevel,
         magicLinkId: submissions.magicLinkId,
+        anonymousSessionId: submissions.anonymousSessionId,
         createdAt: submissions.createdAt,
         course: {
           id: courses.id,
@@ -97,6 +106,7 @@ export class DatabaseStorage implements IStorage {
         confusion: submissions.confusion,
         difficultyLevel: submissions.difficultyLevel,
         magicLinkId: submissions.magicLinkId,
+        anonymousSessionId: submissions.anonymousSessionId,
         createdAt: submissions.createdAt,
         course: {
           id: courses.id,
@@ -129,6 +139,7 @@ export class DatabaseStorage implements IStorage {
         confusion: submissions.confusion,
         difficultyLevel: submissions.difficultyLevel,
         magicLinkId: submissions.magicLinkId,
+        anonymousSessionId: submissions.anonymousSessionId,
         createdAt: submissions.createdAt,
         course: {
           id: courses.id,
@@ -169,6 +180,26 @@ export class DatabaseStorage implements IStorage {
       .update(magicLinks)
       .set({ lastUsedAt: new Date() })
       .where(eq(magicLinks.id, id));
+  }
+
+  async getAnonymousSession(token: string): Promise<AnonymousSession | undefined> {
+    const [session] = await db.select().from(anonymousSessions).where(eq(anonymousSessions.anonymousToken, token));
+    return session || undefined;
+  }
+
+  async createAnonymousSession(insertSession: InsertAnonymousSession): Promise<AnonymousSession> {
+    const [session] = await db
+      .insert(anonymousSessions)
+      .values(insertSession)
+      .returning();
+    return session;
+  }
+
+  async updateAnonymousSessionLastUsed(id: string): Promise<void> {
+    await db
+      .update(anonymousSessions)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(anonymousSessions.id, id));
   }
 
   async getSubmissionStats(): Promise<{
