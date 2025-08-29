@@ -57,6 +57,10 @@ function updateUserSession(
   user.refresh_token = tokens.refresh_token;
   user.expires_at = user.claims?.exp;
   
+  // Check if this user is the app owner (based on Replit username)
+  const ownerUsername = process.env.APP_OWNER_USERNAME;
+  user.isOwner = ownerUsername && user.claims?.preferred_username === ownerUsername;
+  
   // Create anonymous session token (NO identifying info stored)
   if (!user.anonymousToken) {
     user.anonymousToken = generateAnonymousToken();
@@ -150,6 +154,17 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+};
+
+// Check if the authenticated user is the app owner
+export const isOwner: RequestHandler = async (req, res, next) => {
+  const user = req.user as any;
+  
+  if (!req.isAuthenticated() || !user.isOwner) {
+    return res.status(403).json({ message: "Owner access required" });
+  }
+  
+  next();
 };
 
 // Optional middleware - adds anonymous session if user is authenticated

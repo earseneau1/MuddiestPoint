@@ -3,10 +3,30 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema, insertUserStorySchema } from "@shared/schema";
 import { generateFeedbackSuggestions, improveFeedbackText } from "./openai";
+import { isAuthenticated, isOwner } from "./replitAuth";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication status
+  app.get("/api/auth/status", (req, res) => {
+    const user = req.user as any;
+    
+    if (req.isAuthenticated() && user) {
+      res.json({
+        authenticated: true,
+        isOwner: user.isOwner || false,
+        username: user.claims?.preferred_username || null
+      });
+    } else {
+      res.json({
+        authenticated: false,
+        isOwner: false,
+        username: null
+      });
+    }
+  });
+  
   // Courses
   app.get("/api/courses", async (req, res) => {
     try {
