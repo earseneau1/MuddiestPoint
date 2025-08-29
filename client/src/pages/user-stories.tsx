@@ -59,8 +59,9 @@ export default function UserStories() {
   
   // Form state
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
+    asA: '',
+    iWantTo: '',
+    soThat: '',
     submittedBy: '',
     impact: 5,
     confidence: 5,
@@ -129,8 +130,9 @@ export default function UserStories() {
       });
       setShowForm(false);
       setFormData({
-        title: '',
-        description: '',
+        asA: '',
+        iWantTo: '',
+        soThat: '',
         submittedBy: '',
         impact: 5,
         confidence: 5,
@@ -262,7 +264,28 @@ export default function UserStories() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    
+    // Combine the user story format
+    const title = `As a ${formData.asA}, I want to ${formData.iWantTo}`;
+    const description = `As a ${formData.asA}, I want to ${formData.iWantTo}, so that ${formData.soThat}.`;
+    
+    const submitData = {
+      title,
+      description,
+      submittedBy: formData.submittedBy,
+      impact: formData.impact,
+      confidence: formData.confidence,
+      ease: formData.ease
+    };
+    
+    if (editingStory) {
+      updateMutation.mutate({
+        id: editingStory.id,
+        updates: submitData
+      });
+    } else {
+      createMutation.mutate(submitData);
+    }
   };
 
   const handleUpvote = (story: UserStoryWithStats) => {
@@ -286,9 +309,17 @@ export default function UserStories() {
 
   const handleEdit = (story: UserStoryWithStats) => {
     setEditingStory(story);
+    
+    // Try to parse the existing story format back into components
+    // Look for pattern "As a X, I want to Y, so that Z"
+    const asAMatch = story.description.match(/^As a ([^,]+),/);
+    const iWantToMatch = story.description.match(/I want to ([^,]+),/);
+    const soThatMatch = story.description.match(/so that (.+)\.$/);
+    
     setFormData({
-      title: story.title,
-      description: story.description,
+      asA: asAMatch ? asAMatch[1].trim() : '',
+      iWantTo: iWantToMatch ? iWantToMatch[1].trim() : '',
+      soThat: soThatMatch ? soThatMatch[1].trim() : '',
       submittedBy: story.submittedBy || '',
       impact: story.impact,
       confidence: story.confidence,
@@ -362,29 +393,64 @@ export default function UserStories() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Title *</Label>
-                  <Input
-                    id="title"
-                    data-testid="input-title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Brief title for your feature request"
-                    required
-                  />
-                </div>
+                <div className="space-y-4 border-b border-border pb-6">
+                  <h4 className="font-medium text-lg">User Story Format</h4>
+                  
+                  <div>
+                    <Label htmlFor="asA">As a... *</Label>
+                    <Select
+                      value={formData.asA}
+                      onValueChange={(value) => setFormData({ ...formData, asA: value })}
+                      required
+                    >
+                      <SelectTrigger data-testid="select-as-a">
+                        <SelectValue placeholder="Select your role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="student">Student</SelectItem>
+                        <SelectItem value="teaching assistant">Teaching Assistant</SelectItem>
+                        <SelectItem value="professor">Professor</SelectItem>
+                        <SelectItem value="department chair">Department Chair</SelectItem>
+                        <SelectItem value="college admin">College Admin</SelectItem>
+                        <SelectItem value="app administrator/owner">App Administrator/Owner</SelectItem>
+                        <SelectItem value="partner">Partner</SelectItem>
+                        <SelectItem value="stakeholder">Stakeholder</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div>
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea
-                    id="description"
-                    data-testid="input-description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe the feature in detail..."
-                    rows={4}
-                    required
-                  />
+                  <div>
+                    <Label htmlFor="iWantTo">I want to... *</Label>
+                    <Input
+                      id="iWantTo"
+                      data-testid="input-i-want-to"
+                      value={formData.iWantTo}
+                      onChange={(e) => setFormData({ ...formData, iWantTo: e.target.value })}
+                      placeholder="describe what you want to do or achieve"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="soThat">So that... *</Label>
+                    <Input
+                      id="soThat"
+                      data-testid="input-so-that"
+                      value={formData.soThat}
+                      onChange={(e) => setFormData({ ...formData, soThat: e.target.value })}
+                      placeholder="explain the benefit or value"
+                      required
+                    />
+                  </div>
+
+                  {formData.asA && formData.iWantTo && formData.soThat && (
+                    <div className="bg-muted p-4 rounded-lg">
+                      <Label className="text-sm font-medium">Preview:</Label>
+                      <p className="text-sm mt-1">
+                        As a <strong>{formData.asA}</strong>, I want to <strong>{formData.iWantTo}</strong>, so that <strong>{formData.soThat}</strong>.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -469,8 +535,9 @@ export default function UserStories() {
                         setShowForm(false);
                         setEditingStory(null);
                         setFormData({
-                          title: '',
-                          description: '',
+                          asA: '',
+                          iWantTo: '',
+                          soThat: '',
                           submittedBy: '',
                           impact: 5,
                           confidence: 5,
