@@ -111,9 +111,6 @@ export default function UserStories() {
         localStorage.setItem('userStoriesSessionToken', newToken);
       }
       
-      console.log("Frontend: Submitting data:", data);
-      console.log("Frontend: Using session token:", sessionToken);
-      
       const response = await fetch('/api/user-stories', {
         method: 'POST',
         headers: {
@@ -124,8 +121,6 @@ export default function UserStories() {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Frontend: API error:", errorData);
         throw new Error('Failed to create user story');
       }
       return response.json();

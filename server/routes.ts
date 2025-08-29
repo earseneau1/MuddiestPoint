@@ -328,9 +328,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      console.log("Request body:", req.body);
-      console.log("Session token:", sessionToken);
-      
       const data = insertUserStorySchema.parse(req.body);
       const story = await storage.createUserStory({
         ...data,
@@ -339,7 +336,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(story);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error("Validation errors:", error.errors);
         res.status(400).json({ error: error.errors });
       } else {
         console.error("Error creating user story:", error);

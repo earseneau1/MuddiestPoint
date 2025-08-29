@@ -187,6 +187,7 @@ export const insertUserStorySchema = createInsertSchema(userStories).omit({
   createdAt: true,
   updatedAt: true,
   mergedIntoId: true,
+  sessionToken: true, // Handled by backend from headers
 }).extend({
   impact: z.number().min(1).max(10),
   confidence: z.number().min(1).max(10),
