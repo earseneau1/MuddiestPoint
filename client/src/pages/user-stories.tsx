@@ -418,7 +418,7 @@ export default function UserStories() {
                   <h4 className="font-medium text-lg">User Story Format</h4>
                   
                   <div>
-                    <Label htmlFor="asA">As a... *</Label>
+                    <Label htmlFor="asA">As a...</Label>
                     <Select
                       value={formData.asA}
                       onValueChange={(value) => setFormData({ ...formData, asA: value })}
@@ -440,7 +440,7 @@ export default function UserStories() {
                   </div>
 
                   <div>
-                    <Label htmlFor="iWantTo">I want to... *</Label>
+                    <Label htmlFor="iWantTo">I want to...</Label>
                     <Input
                       id="iWantTo"
                       data-testid="input-i-want-to"
@@ -452,7 +452,7 @@ export default function UserStories() {
                   </div>
 
                   <div>
-                    <Label htmlFor="soThat">So that... *</Label>
+                    <Label htmlFor="soThat">So that...</Label>
                     <Input
                       id="soThat"
                       data-testid="input-so-that"
