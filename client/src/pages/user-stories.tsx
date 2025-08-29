@@ -403,17 +403,19 @@ export default function UserStories() {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button
-                  data-testid="button-toggle-owner"
-                  variant={isOwner ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setIsOwner(!isOwner);
-                    localStorage.setItem('isAppOwner', (!isOwner).toString());
-                  }}
-                >
-                  {isOwner ? "Owner Mode" : "User Mode"}
-                </Button>
+                {isOwner && (
+                  <Button
+                    data-testid="button-toggle-owner"
+                    variant={isOwner ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setIsOwner(!isOwner);
+                      localStorage.setItem('isAppOwner', (!isOwner).toString());
+                    }}
+                  >
+                    {isOwner ? "Owner Mode" : "User Mode"}
+                  </Button>
+                )}
                 <Button 
                   data-testid="button-new-story"
                   onClick={() => setShowForm(!showForm)}
