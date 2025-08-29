@@ -6,6 +6,7 @@ import {
   classSessions,
   userStories,
   userStoryUpvotes,
+  users,
   type Course, 
   type InsertCourse,
   type Submission,
@@ -22,7 +23,9 @@ import {
   type InsertUserStory,
   type UserStoryUpvote,
   type InsertUserStoryUpvote,
-  type UserStoryWithStats
+  type UserStoryWithStats,
+  type User,
+  type UpsertUser
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
@@ -71,6 +74,10 @@ export interface IStorage {
   
   // User Story Merge
   mergeUserStories(keepId: string, mergeId: string): Promise<UserStory | undefined>;
+
+  // Users (for authentication)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
 
   // Analytics
   getSubmissionStats(): Promise<{
@@ -578,6 +585,27 @@ export class DatabaseStorage implements IStorage {
       console.error("Error merging user stories:", error);
       return undefined;
     }
+  }
+
+  // User operations for authentication
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
   }
 }
 

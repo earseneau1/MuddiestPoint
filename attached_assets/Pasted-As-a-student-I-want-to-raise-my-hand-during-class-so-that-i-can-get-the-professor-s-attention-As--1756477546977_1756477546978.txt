@@ -1,0 +1,17 @@
+As a student, I want to raise my hand during class, so that i can get the professor's attention.
+As a student, I want to make my teacher aware of something I dont understand, so that they can elaborate on it and teach me about it later
+As a student, I want to submit points of confusion immediately after class , so that I can get targeted support on the concepts that I find the most confusing.
+"As a student, I want to pay attention, so that I do not fail
+"
+As a student, I want to learn the best efficient way to learn AI, so that I can use my time wisely
+As a student, I want to learn more about how AI integration works with online courses, so that I can build my online course quicker and more efficiently. 
+As a student, I want to get the professors attention in class , so that they can slow down on their lecture 
+As a professor, I want to receive and review student's point of confusion in a centralized dashboard, so that I can address misunderstandings and improve future lessons. 
+As a student, I want to ask a question in class, so that the teacher elaborates and clears up any misconceptions
+As a student, I want to see Professors web apps created, so that we can have a better understanding of realistic things we can make and learn how to do them, also helps our creativity
+As a student, I want to Have clear instructions about what is expected from me in a project or assignment. Sometimes I feel like the instructions are not clear, specific, or detailed..., so that I can meet the expectations for you, the professor, and also have a clear direction on how I should address an assignment. 
+"As a department chair, I want to see a lot of feedback using muddiest point, so that the curriculum sees constant improvement
+"
+As a student, I want to be able to make an account, so that i can see my progress with my muddiest points
+As a student, I want to see examples of A level work, so that I understand what exactly the professor is looking for.
+As a student, I want to clarify terminology , so that I understand concepts for assessment

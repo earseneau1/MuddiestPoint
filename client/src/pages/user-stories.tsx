@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Plus, 
   ChevronUp, 
@@ -33,7 +34,9 @@ import {
   PlayCircle,
   PauseCircle,
   XCircle,
-  HelpCircle
+  HelpCircle,
+  LogIn,
+  LogOut
 } from "lucide-react";
 import type { UserStoryWithStats } from "@shared/schema";
 
@@ -51,6 +54,7 @@ const statusConfig: Record<StoryStatus, { label: string; color: string; icon: an
 
 export default function UserStories() {
   const { toast } = useToast();
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showForm, setShowForm] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
@@ -414,6 +418,31 @@ export default function UserStories() {
                     }}
                   >
                     {isOwner ? "Owner Mode" : "User Mode"}
+                  </Button>
+                )}
+                {isAuthLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading...</div>
+                ) : isAuthenticated ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.href = '/api/logout'}
+                    data-testid="button-sign-out"
+                    className="flex items-center space-x-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Sign Out</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => window.location.href = '/api/login'}
+                    data-testid="button-sign-in"
+                    className="flex items-center space-x-2"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    <span>Sign In</span>
                   </Button>
                 )}
                 <Button 

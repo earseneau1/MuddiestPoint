@@ -3,11 +3,13 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema, insertUserStorySchema } from "@shared/schema";
 import { generateFeedbackSuggestions, improveFeedbackText } from "./openai";
-import { isAuthenticated, isOwner } from "./replitAuth";
+import { setupAuth, isAuthenticated, isOwner } from "./replitAuth";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup authentication
+  await setupAuth(app);
   // Authentication status
   app.get("/api/auth/status", (req, res) => {
     const user = req.user as any;
@@ -24,6 +26,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isOwner: false,
         username: null
       });
+    }
+  });
+
+  // Get current user information
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
     }
   });
   
