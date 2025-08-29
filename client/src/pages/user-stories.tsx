@@ -103,7 +103,7 @@ export default function UserStories() {
 
   // Create user story mutation
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: { title: string; description: string; submittedBy: string; impact: number; confidence: number; ease: number }) => {
       if (!sessionToken) {
         // Generate a new session token if needed
         const newToken = crypto.randomUUID();
@@ -150,7 +150,7 @@ export default function UserStories() {
 
   // Update user story mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<typeof formData & { status: StoryStatus }> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<{ title: string; description: string; submittedBy: string; impact: number; confidence: number; ease: number; status?: StoryStatus }> }) => {
       const response = await fetch(`/api/user-stories/${id}`, {
         method: 'PUT',
         headers: {
@@ -265,6 +265,16 @@ export default function UserStories() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!formData.asA || !formData.iWantTo || !formData.soThat) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     // Combine the user story format
     const title = `As a ${formData.asA}, I want to ${formData.iWantTo}`;
     const description = `As a ${formData.asA}, I want to ${formData.iWantTo}, so that ${formData.soThat}.`;
@@ -310,21 +320,32 @@ export default function UserStories() {
   const handleEdit = (story: UserStoryWithStats) => {
     setEditingStory(story);
     
-    // Try to parse the existing story format back into components
-    // Look for pattern "As a X, I want to Y, so that Z"
-    const asAMatch = story.description.match(/^As a ([^,]+),/);
-    const iWantToMatch = story.description.match(/I want to ([^,]+),/);
-    const soThatMatch = story.description.match(/so that (.+)\.$/);
+    // Parse the story description back into its components
+    // Expected format: "As a [role], I want to [action], so that [benefit]."
+    const descriptionMatch = story.description.match(/As a (.+?), I want to (.+?), so that (.+?)\.?$/);
     
-    setFormData({
-      asA: asAMatch ? asAMatch[1].trim() : '',
-      iWantTo: iWantToMatch ? iWantToMatch[1].trim() : '',
-      soThat: soThatMatch ? soThatMatch[1].trim() : '',
-      submittedBy: story.submittedBy || '',
-      impact: story.impact,
-      confidence: story.confidence,
-      ease: story.ease
-    });
+    if (descriptionMatch) {
+      setFormData({
+        asA: descriptionMatch[1].trim(),
+        iWantTo: descriptionMatch[2].trim(),
+        soThat: descriptionMatch[3].trim(),
+        submittedBy: story.submittedBy || '',
+        impact: story.impact,
+        confidence: story.confidence,
+        ease: story.ease
+      });
+    } else {
+      // Fallback if the format doesn't match
+      setFormData({
+        asA: '',
+        iWantTo: '',
+        soThat: '',
+        submittedBy: story.submittedBy || '',
+        impact: story.impact,
+        confidence: story.confidence,
+        ease: story.ease
+      });
+    }
     setShowForm(true);
   };
 
@@ -401,7 +422,6 @@ export default function UserStories() {
                     <Select
                       value={formData.asA}
                       onValueChange={(value) => setFormData({ ...formData, asA: value })}
-                      required
                     >
                       <SelectTrigger data-testid="select-as-a">
                         <SelectValue placeholder="Select your role" />
