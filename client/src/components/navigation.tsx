@@ -1,11 +1,13 @@
 import { Link, useLocation } from "wouter";
-import { HelpCircle, Menu, Shield } from "lucide-react";
+import { HelpCircle, Menu, Shield, LogIn, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Navigation() {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuth();
 
   return (
     <header className="bg-card border-b border-border sticky top-0 z-50">
@@ -47,7 +49,31 @@ export default function Navigation() {
               Professor Dashboard
             </Link>
             
-            
+            {isAuthLoading ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : isAuthenticated ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.location.href = '/api/logout'}
+                data-testid="button-sign-out"
+                className="flex items-center space-x-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign Out</span>
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => window.location.href = '/api/login'}
+                data-testid="button-sign-in"
+                className="flex items-center space-x-2"
+              >
+                <LogIn className="h-4 w-4" />
+                <span>Sign In</span>
+              </Button>
+            )}
           </nav>
 
           <div className="md:hidden">
@@ -97,6 +123,37 @@ export default function Navigation() {
                 Professor Dashboard
               </Link>
               
+              {isAuthLoading ? (
+                <div className="px-4 py-2 text-sm text-muted-foreground">Loading...</div>
+              ) : isAuthenticated ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    window.location.href = '/api/logout';
+                  }}
+                  data-testid="mobile-button-sign-out"
+                  className="flex items-center space-x-2 mx-4"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign Out</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    window.location.href = '/api/login';
+                  }}
+                  data-testid="mobile-button-sign-in"
+                  className="flex items-center space-x-2 mx-4"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Sign In</span>
+                </Button>
+              )}
             </div>
           </div>
         )}
