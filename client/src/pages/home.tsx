@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -18,7 +19,9 @@ import {
   BookOpen,
   Target,
   Lightbulb,
-  Search
+  Search,
+  Mail,
+  Key
 } from "lucide-react";
 
 export default function Home() {
@@ -26,6 +29,50 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [anonymousEmail, setAnonymousEmail] = useState("");
+  const [isAnonymousVerified, setIsAnonymousVerified] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // Check if user has an anonymous session
+  useEffect(() => {
+    const token = localStorage.getItem('anonymousToken');
+    if (token) {
+      setIsAnonymousVerified(true);
+    }
+  }, []);
+
+  const handleAnonymousVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!anonymousEmail.trim()) return;
+
+    setIsVerifying(true);
+    try {
+      const response = await apiRequest('/api/auth/anonymous', {
+        method: 'POST',
+        body: JSON.stringify({ email: anonymousEmail }),
+      });
+      
+      // Store the anonymous token in localStorage
+      localStorage.setItem('anonymousToken', response.token);
+      setIsAnonymousVerified(true);
+      
+      toast({
+        title: "Verification Successful",
+        description: "You can now submit feedback anonymously. Your identity is protected.",
+        className: "bg-green-50 dark:bg-green-950",
+      });
+      
+      setAnonymousEmail("");
+    } catch (error: any) {
+      toast({
+        title: "Verification Failed",
+        description: error.message || "Only @tcu.edu email addresses are allowed.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const handleCourseCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,25 +125,113 @@ export default function Home() {
             real-time insights to improve teaching effectiveness throughout the semester.
           </p>
           
-          {/* Quick Course Access */}
-          <div className="bg-card/50 rounded-lg p-6 mb-8 max-w-md mx-auto border">
-            <h3 className="text-lg font-serif font-semibold mb-3">Quick Course Access</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Enter your course code to jump directly to feedback submission
-            </p>
-            <form onSubmit={handleCourseCodeSubmit} className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="e.g., CS101, MATH200"
-                value={courseCode}
-                onChange={(e) => setCourseCode(e.target.value)}
-                className="flex-1"
-                data-testid="input-course-code"
-              />
-              <Button type="submit" disabled={isLoading || !courseCode.trim()} data-testid="button-course-lookup">
-                <Search className="h-4 w-4" />
-              </Button>
-            </form>
+          {/* Anonymous Verification & Quick Course Access */}
+          <div className="grid md:grid-cols-2 gap-4 mb-8 max-w-4xl mx-auto">
+            {/* Anonymous Verification */}
+            <Card className="bg-card/50 border">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-serif flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  Student Verification
+                </CardTitle>
+                <CardDescription className="text-sm">
+                  {isAnonymousVerified 
+                    ? "You're verified! Your identity remains anonymous."
+                    : "Optional: Verify with TCU email for enhanced features"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isAnonymousVerified ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="text-sm font-medium">Anonymously Verified</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Your submissions are completely anonymous. No one can see your identity.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={() => {
+                        localStorage.removeItem('anonymousToken');
+                        setIsAnonymousVerified(false);
+                        toast({
+                          title: "Session Cleared",
+                          description: "Your anonymous session has been removed.",
+                        });
+                      }}
+                    >
+                      Clear Session
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleAnonymousVerification} className="space-y-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="email" className="text-sm">TCU Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="name@tcu.edu"
+                        value={anonymousEmail}
+                        onChange={(e) => setAnonymousEmail(e.target.value)}
+                        disabled={isVerifying}
+                        className="text-sm"
+                        data-testid="input-anonymous-email"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      disabled={isVerifying || !anonymousEmail.trim()} 
+                      className="w-full"
+                      size="sm"
+                      data-testid="button-verify-anonymous"
+                    >
+                      {isVerifying ? (
+                        <>Verifying...</>
+                      ) : (
+                        <>
+                          <Key className="h-4 w-4 mr-2" />
+                          Verify Anonymously
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Your email is hashed immediately. We never store your identity.
+                    </p>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Quick Course Access */}
+            <Card className="bg-card/50 border">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-serif flex items-center gap-2">
+                  <Search className="h-5 w-5 text-primary" />
+                  Quick Course Access
+                </CardTitle>
+                <CardDescription className="text-sm">
+                  Enter your course code to jump directly to feedback submission
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCourseCodeSubmit} className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="e.g., CS101, MATH200"
+                    value={courseCode}
+                    onChange={(e) => setCourseCode(e.target.value)}
+                    className="flex-1"
+                    data-testid="input-course-code"
+                  />
+                  <Button type="submit" disabled={isLoading || !courseCode.trim()} data-testid="button-course-lookup">
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
@@ -336,6 +471,10 @@ export default function Home() {
               <a href="#" className="hover:text-primary transition-colors" data-testid="link-how-it-works">How it Works</a>
               <a href="#" className="hover:text-primary transition-colors" data-testid="link-support">Support</a>
               <a href="#" className="hover:text-primary transition-colors" data-testid="link-about">About</a>
+              <Link href="/admin" className="hover:text-primary transition-colors flex items-center gap-1" data-testid="link-admin">
+                <Shield className="h-3 w-3" />
+                Admin
+              </Link>
             </div>
           </div>
         </div>

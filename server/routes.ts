@@ -10,7 +10,8 @@ import { randomUUID } from "crypto";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
-  // Authentication status
+  
+  // Authentication status - for admin users
   app.get("/api/auth/status", (req, res) => {
     const user = req.user as any;
     
@@ -29,7 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get current user information
+  // Get current user information - for admin users
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -38,6 +39,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Anonymous authentication for students
+  app.post('/api/auth/anonymous', async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      // Verify it's a TCU email
+      if (!email || !email.endsWith('@tcu.edu')) {
+        res.status(400).json({ error: 'Only @tcu.edu email addresses are allowed' });
+        return;
+      }
+      
+      // Create anonymous session - hash the email for privacy
+      const crypto = await import('crypto');
+      const hashedEmail = crypto.createHash('sha256').update(email).digest('hex');
+      const anonymousToken = 'anon_' + crypto.randomBytes(16).toString('hex');
+      
+      // Store anonymous session
+      const session = await storage.createAnonymousSession({
+        token: anonymousToken,
+        hashedIdentifier: hashedEmail,
+      });
+      
+      res.json({
+        token: anonymousToken,
+        sessionId: session.id,
+        // Never send back the actual email or hashed email
+      });
+    } catch (error) {
+      console.error("Error creating anonymous session:", error);
+      res.status(500).json({ error: "Failed to create anonymous session" });
+    }
+  });
+
+  // Get anonymous session status
+  app.get('/api/auth/anonymous/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      const session = await storage.getAnonymousSession(token);
+      
+      if (!session) {
+        res.status(404).json({ error: 'Session not found' });
+        return;
+      }
+      
+      res.json({
+        valid: true,
+        sessionId: session.id,
+        // Never expose the hashed identifier
+      });
+    } catch (error) {
+      console.error("Error getting anonymous session:", error);
+      res.status(500).json({ error: "Failed to get session" });
     }
   });
   
