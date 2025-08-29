@@ -47,13 +47,23 @@ export default function Home() {
 
     setIsVerifying(true);
     try {
-      const response = await apiRequest('/api/auth/anonymous', {
+      const response = await fetch('/api/auth/anonymous', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ email: anonymousEmail }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to verify');
+      }
+
+      const data = await response.json();
       
       // Store the anonymous token in localStorage
-      localStorage.setItem('anonymousToken', response.token);
+      localStorage.setItem('anonymousToken', data.token);
       setIsAnonymousVerified(true);
       
       toast({

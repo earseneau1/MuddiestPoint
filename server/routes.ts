@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema, insertUserStorySchema } from "@shared/schema";
+import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema, insertUserStorySchema, type InsertUserStory } from "@shared/schema";
 import { generateFeedbackSuggestions, improveFeedbackText } from "./openai";
 import { setupAuth, isAuthenticated, isOwner } from "./replitAuth";
 import { z } from "zod";
@@ -60,8 +60,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Store anonymous session
       const session = await storage.createAnonymousSession({
-        token: anonymousToken,
-        hashedIdentifier: hashedEmail,
+        anonymousToken: anonymousToken,
       });
       
       res.json({
@@ -419,10 +418,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const data = insertUserStorySchema.parse(req.body);
-      const story = await storage.createUserStory({
+      
+      // Add sessionToken which is omitted from the schema but required for storage
+      const storyData = {
         ...data,
         sessionToken,
-      });
+      } as InsertUserStory & { sessionToken: string };
+      
+      const story = await storage.createUserStory(storyData);
       res.status(201).json(story);
     } catch (error) {
       if (error instanceof z.ZodError) {
