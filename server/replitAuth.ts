@@ -92,9 +92,17 @@ export async function setupAuth(app: Express) {
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
   ) => {
+    const claims = tokens.claims();
+    const email = claims.email;
+    
+    // Restrict sign ups to @tcu.edu emails only
+    if (!email || !email.endsWith('@tcu.edu')) {
+      return verified(new Error('Access restricted to @tcu.edu email addresses'), false);
+    }
+    
     const user = {};
     updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
+    await upsertUser(claims);
     verified(null, user);
   };
 
