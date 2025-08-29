@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Link } from "wouter";
 import { 
   Plus, 
   ChevronUp, 
@@ -31,7 +32,8 @@ import {
   AlertCircle,
   PlayCircle,
   PauseCircle,
-  XCircle
+  XCircle,
+  HelpCircle
 } from "lucide-react";
 import type { UserStoryWithStats } from "@shared/schema";
 
@@ -370,11 +372,26 @@ export default function UserStories() {
   };
 
   const sortedStories = data ? [...data].sort((a, b) => b.iceScore - a.iceScore) : [];
-  const groupedStories = data ? groupByStatus(data) : {};
+  const groupedStories: Record<StoryStatus, UserStoryWithStats[]> = data ? groupByStatus(data) : {} as Record<StoryStatus, UserStoryWithStats[]>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <>
+      {/* Header */}
+      <header className="bg-card border-b border-border sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center">
+            <Link href="/" className="flex items-center space-x-3" data-testid="link-home">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <HelpCircle className="text-primary-foreground text-lg" />
+              </div>
+              <h1 className="text-xl font-serif font-semibold text-foreground">Muddiest Point</h1>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4">
+        <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <Card>
           <CardHeader>
@@ -872,5 +889,6 @@ export default function UserStories() {
         </Dialog>
       </div>
     </div>
+    </>
   );
 }
