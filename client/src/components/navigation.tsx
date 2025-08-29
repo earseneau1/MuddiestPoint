@@ -47,10 +47,7 @@ export default function Navigation() {
               Professor Dashboard
             </Link>
             
-            <div className="flex items-center space-x-2 text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full" data-testid="privacy-badge">
-              <Shield className="h-3 w-3 text-primary" />
-              <span>Privacy First</span>
-            </div>
+            
           </nav>
 
           <div className="md:hidden">
