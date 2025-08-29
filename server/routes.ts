@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema } from "@shared/schema";
+import { insertCourseSchema, insertSubmissionSchema, insertMagicLinkSchema, insertClassSessionSchema, insertUserStorySchema } from "@shared/schema";
 import { generateFeedbackSuggestions, improveFeedbackText } from "./openai";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Courses
@@ -279,6 +280,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error improving feedback:", error);
       res.status(500).json({ error: "Failed to improve feedback" });
+    }
+  });
+
+  // User Stories
+  app.get("/api/user-stories", async (req, res) => {
+    try {
+      // Get or create session token
+      let sessionToken = req.headers['x-session-token'] as string;
+      if (!sessionToken) {
+        sessionToken = randomUUID();
+      }
+      
+      const stories = await storage.getUserStories(sessionToken);
+      res.json({ stories, sessionToken });
+    } catch (error) {
+      console.error("Error fetching user stories:", error);
+      res.status(500).json({ error: "Failed to fetch user stories" });
+    }
+  });
+
+  app.get("/api/user-stories/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      let sessionToken = req.headers['x-session-token'] as string;
+      if (!sessionToken) {
+        sessionToken = randomUUID();
+      }
+      
+      const story = await storage.getUserStory(id, sessionToken);
+      if (story) {
+        res.json(story);
+      } else {
+        res.status(404).json({ error: "User story not found" });
+      }
+    } catch (error) {
+      console.error("Error fetching user story:", error);
+      res.status(500).json({ error: "Failed to fetch user story" });
+    }
+  });
+
+  app.post("/api/user-stories", async (req, res) => {
+    try {
+      let sessionToken = req.headers['x-session-token'] as string;
+      if (!sessionToken) {
+        res.status(401).json({ error: "Session token required to submit user stories" });
+        return;
+      }
+      
+      const data = insertUserStorySchema.parse(req.body);
+      const story = await storage.createUserStory({
+        ...data,
+        sessionToken,
+      });
+      res.status(201).json(story);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        console.error("Error creating user story:", error);
+        res.status(500).json({ error: "Failed to create user story" });
+      }
+    }
+  });
+
+  app.put("/api/user-stories/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const isOwner = req.headers['x-app-owner'] === 'true';
+      
+      if (!isOwner) {
+        res.status(403).json({ error: "Only app owners can update user stories" });
+        return;
+      }
+      
+      const data = insertUserStorySchema.partial().parse(req.body);
+      const story = await storage.updateUserStory(id, data);
+      
+      if (story) {
+        res.json(story);
+      } else {
+        res.status(404).json({ error: "User story not found" });
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        console.error("Error updating user story:", error);
+        res.status(500).json({ error: "Failed to update user story" });
+      }
+    }
+  });
+
+  app.delete("/api/user-stories/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const isOwner = req.headers['x-app-owner'] === 'true';
+      
+      if (!isOwner) {
+        res.status(403).json({ error: "Only app owners can delete user stories" });
+        return;
+      }
+      
+      const success = await storage.deleteUserStory(id);
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ error: "User story not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting user story:", error);
+      res.status(500).json({ error: "Failed to delete user story" });
+    }
+  });
+
+  // User Story Upvotes
+  app.post("/api/user-stories/:id/upvote", async (req, res) => {
+    try {
+      const { id } = req.params;
+      let sessionToken = req.headers['x-session-token'] as string;
+      
+      if (!sessionToken) {
+        res.status(401).json({ error: "Session token required to upvote" });
+        return;
+      }
+      
+      const success = await storage.upvoteUserStory(id, sessionToken);
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(400).json({ error: "Already upvoted" });
+      }
+    } catch (error) {
+      console.error("Error upvoting user story:", error);
+      res.status(500).json({ error: "Failed to upvote user story" });
+    }
+  });
+
+  app.delete("/api/user-stories/:id/upvote", async (req, res) => {
+    try {
+      const { id } = req.params;
+      let sessionToken = req.headers['x-session-token'] as string;
+      
+      if (!sessionToken) {
+        res.status(401).json({ error: "Session token required to remove upvote" });
+        return;
+      }
+      
+      const success = await storage.removeUpvote(id, sessionToken);
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(400).json({ error: "No upvote found" });
+      }
+    } catch (error) {
+      console.error("Error removing upvote:", error);
+      res.status(500).json({ error: "Failed to remove upvote" });
+    }
+  });
+
+  // User Story Merge
+  app.post("/api/user-stories/merge", async (req, res) => {
+    try {
+      const isOwner = req.headers['x-app-owner'] === 'true';
+      
+      if (!isOwner) {
+        res.status(403).json({ error: "Only app owners can merge user stories" });
+        return;
+      }
+      
+      const { keepId, mergeId } = req.body;
+      
+      if (!keepId || !mergeId) {
+        res.status(400).json({ error: "Both keepId and mergeId are required" });
+        return;
+      }
+      
+      const mergedStory = await storage.mergeUserStories(keepId, mergeId);
+      if (mergedStory) {
+        res.json(mergedStory);
+      } else {
+        res.status(500).json({ error: "Failed to merge user stories" });
+      }
+    } catch (error) {
+      console.error("Error merging user stories:", error);
+      res.status(500).json({ error: "Failed to merge user stories" });
     }
   });
 

@@ -46,6 +46,15 @@ export default function Navigation() {
             >
               Professor Dashboard
             </Link>
+            <Link 
+              href="/user-stories" 
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                location === "/user-stories" ? "text-primary font-semibold" : "text-foreground hover:text-primary"
+              }`}
+              data-testid="nav-user-stories"
+            >
+              User Stories
+            </Link>
             <div className="flex items-center space-x-2 text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full" data-testid="privacy-badge">
               <Shield className="h-3 w-3 text-primary" />
               <span>Privacy First</span>
@@ -97,6 +106,16 @@ export default function Navigation() {
                 data-testid="mobile-nav-professor-dashboard"
               >
                 Professor Dashboard
+              </Link>
+              <Link 
+                href="/user-stories" 
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  location === "/user-stories" ? "text-primary font-semibold" : "text-foreground hover:text-primary"
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+                data-testid="mobile-nav-user-stories"
+              >
+                User Stories
               </Link>
             </div>
           </div>

@@ -139,7 +139,79 @@ export type InsertAnonymousSession = z.infer<typeof insertAnonymousSessionSchema
 export type ClassSession = typeof classSessions.$inferSelect;
 export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
 
+// User Stories for feature management
+export const userStories = pgTable("user_stories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  submittedBy: text("submitted_by"), // Optional name
+  impact: integer("impact").notNull(), // 1-10 scale
+  confidence: integer("confidence").notNull(), // 1-10 scale  
+  ease: integer("ease").notNull(), // 1-10 scale
+  status: text("status").notNull().default('submitted'), // submitted, in_review, accepted, in_progress, on_hold, done
+  sessionToken: text("session_token").notNull(), // Track who submitted
+  mergedIntoId: varchar("merged_into_id").references(() => userStories.id), // For tracking merges
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const userStoryUpvotes = pgTable("user_story_upvotes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userStoryId: varchar("user_story_id").notNull().references(() => userStories.id, { onDelete: "cascade" }),
+  sessionToken: text("session_token").notNull(), // Track unique votes
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_upvotes_story").on(table.userStoryId),
+  index("idx_upvotes_session").on(table.sessionToken),
+]);
+
+// Relations for user stories
+export const userStoriesRelations = relations(userStories, ({ many, one }) => ({
+  upvotes: many(userStoryUpvotes),
+  mergedInto: one(userStories, {
+    fields: [userStories.mergedIntoId],
+    references: [userStories.id],
+  }),
+}));
+
+export const userStoryUpvotesRelations = relations(userStoryUpvotes, ({ one }) => ({
+  userStory: one(userStories, {
+    fields: [userStoryUpvotes.userStoryId],
+    references: [userStories.id],
+  }),
+}));
+
+// Insert schemas for user stories
+export const insertUserStorySchema = createInsertSchema(userStories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  mergedIntoId: true,
+}).extend({
+  impact: z.number().min(1).max(10),
+  confidence: z.number().min(1).max(10),
+  ease: z.number().min(1).max(10),
+  status: z.enum(['submitted', 'in_review', 'accepted', 'in_progress', 'on_hold', 'done']).optional(),
+});
+
+export const insertUserStoryUpvoteSchema = createInsertSchema(userStoryUpvotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for user stories
+export type UserStory = typeof userStories.$inferSelect;
+export type InsertUserStory = z.infer<typeof insertUserStorySchema>;
+export type UserStoryUpvote = typeof userStoryUpvotes.$inferSelect;
+export type InsertUserStoryUpvote = z.infer<typeof insertUserStoryUpvoteSchema>;
+
 // Extended types for frontend
+export type UserStoryWithStats = UserStory & {
+  upvoteCount: number;
+  hasUpvoted: boolean;
+  iceScore: number; // Sum of impact + confidence + ease
+};
+
 export type SubmissionWithCourse = Submission & {
   course: Course;
   magicLink?: MagicLink;

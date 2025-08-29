@@ -4,6 +4,8 @@ import {
   magicLinks,
   anonymousSessions,
   classSessions,
+  userStories,
+  userStoryUpvotes,
   type Course, 
   type InsertCourse,
   type Submission,
@@ -15,7 +17,12 @@ import {
   type ClassSession,
   type InsertClassSession,
   type SubmissionWithCourse,
-  type ConfusionPattern
+  type ConfusionPattern,
+  type UserStory,
+  type InsertUserStory,
+  type UserStoryUpvote,
+  type InsertUserStoryUpvote,
+  type UserStoryWithStats
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
@@ -50,6 +57,20 @@ export interface IStorage {
   deactivateExpiredSessions(): Promise<void>;
   updateCourse(id: string, updates: Partial<InsertCourse>): Promise<Course | undefined>;
   deleteCourse(id: string): Promise<boolean>;
+
+  // User Stories
+  getUserStories(sessionToken: string): Promise<UserStoryWithStats[]>;
+  getUserStory(id: string, sessionToken: string): Promise<UserStoryWithStats | undefined>;
+  createUserStory(story: InsertUserStory): Promise<UserStory>;
+  updateUserStory(id: string, updates: Partial<InsertUserStory>): Promise<UserStory | undefined>;
+  deleteUserStory(id: string): Promise<boolean>;
+  
+  // User Story Upvotes
+  upvoteUserStory(storyId: string, sessionToken: string): Promise<boolean>;
+  removeUpvote(storyId: string, sessionToken: string): Promise<boolean>;
+  
+  // User Story Merge
+  mergeUserStories(keepId: string, mergeId: string): Promise<UserStory | undefined>;
 
   // Analytics
   getSubmissionStats(): Promise<{
@@ -356,6 +377,207 @@ export class DatabaseStorage implements IStorage {
       .delete(courses)
       .where(eq(courses.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // User Stories Implementation
+  async getUserStories(sessionToken: string): Promise<UserStoryWithStats[]> {
+    const stories = await db
+      .select({
+        id: userStories.id,
+        title: userStories.title,
+        description: userStories.description,
+        submittedBy: userStories.submittedBy,
+        impact: userStories.impact,
+        confidence: userStories.confidence,
+        ease: userStories.ease,
+        status: userStories.status,
+        sessionToken: userStories.sessionToken,
+        mergedIntoId: userStories.mergedIntoId,
+        createdAt: userStories.createdAt,
+        updatedAt: userStories.updatedAt,
+      })
+      .from(userStories)
+      .where(sql`${userStories.mergedIntoId} IS NULL`)
+      .orderBy(desc(userStories.createdAt));
+
+    // Get upvote counts and check if current session has upvoted
+    const storiesWithStats = await Promise.all(
+      stories.map(async (story) => {
+        const upvotes = await db
+          .select({ count: count() })
+          .from(userStoryUpvotes)
+          .where(eq(userStoryUpvotes.userStoryId, story.id));
+
+        const hasUpvoted = await db
+          .select({ count: count() })
+          .from(userStoryUpvotes)
+          .where(
+            and(
+              eq(userStoryUpvotes.userStoryId, story.id),
+              eq(userStoryUpvotes.sessionToken, sessionToken)
+            )
+          );
+
+        return {
+          ...story,
+          upvoteCount: upvotes[0].count,
+          hasUpvoted: hasUpvoted[0].count > 0,
+          iceScore: story.impact + story.confidence + story.ease,
+        };
+      })
+    );
+
+    return storiesWithStats;
+  }
+
+  async getUserStory(id: string, sessionToken: string): Promise<UserStoryWithStats | undefined> {
+    const [story] = await db
+      .select()
+      .from(userStories)
+      .where(eq(userStories.id, id));
+
+    if (!story) return undefined;
+
+    const upvotes = await db
+      .select({ count: count() })
+      .from(userStoryUpvotes)
+      .where(eq(userStoryUpvotes.userStoryId, story.id));
+
+    const hasUpvoted = await db
+      .select({ count: count() })
+      .from(userStoryUpvotes)
+      .where(
+        and(
+          eq(userStoryUpvotes.userStoryId, story.id),
+          eq(userStoryUpvotes.sessionToken, sessionToken)
+        )
+      );
+
+    return {
+      ...story,
+      upvoteCount: upvotes[0].count,
+      hasUpvoted: hasUpvoted[0].count > 0,
+      iceScore: story.impact + story.confidence + story.ease,
+    };
+  }
+
+  async createUserStory(insertStory: InsertUserStory): Promise<UserStory> {
+    const [story] = await db
+      .insert(userStories)
+      .values(insertStory)
+      .returning();
+    return story;
+  }
+
+  async updateUserStory(id: string, updates: Partial<InsertUserStory>): Promise<UserStory | undefined> {
+    const [updatedStory] = await db
+      .update(userStories)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(userStories.id, id))
+      .returning();
+    return updatedStory || undefined;
+  }
+
+  async deleteUserStory(id: string): Promise<boolean> {
+    const result = await db
+      .delete(userStories)
+      .where(eq(userStories.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async upvoteUserStory(storyId: string, sessionToken: string): Promise<boolean> {
+    try {
+      // Check if already upvoted
+      const existing = await db
+        .select()
+        .from(userStoryUpvotes)
+        .where(
+          and(
+            eq(userStoryUpvotes.userStoryId, storyId),
+            eq(userStoryUpvotes.sessionToken, sessionToken)
+          )
+        );
+
+      if (existing.length > 0) {
+        return false; // Already upvoted
+      }
+
+      await db
+        .insert(userStoryUpvotes)
+        .values({
+          userStoryId: storyId,
+          sessionToken,
+        });
+      return true;
+    } catch (error) {
+      console.error("Error upvoting user story:", error);
+      return false;
+    }
+  }
+
+  async removeUpvote(storyId: string, sessionToken: string): Promise<boolean> {
+    const result = await db
+      .delete(userStoryUpvotes)
+      .where(
+        and(
+          eq(userStoryUpvotes.userStoryId, storyId),
+          eq(userStoryUpvotes.sessionToken, sessionToken)
+        )
+      );
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async mergeUserStories(keepId: string, mergeId: string): Promise<UserStory | undefined> {
+    try {
+      // Transfer all upvotes from mergeId to keepId (avoiding duplicates)
+      const mergeUpvotes = await db
+        .select()
+        .from(userStoryUpvotes)
+        .where(eq(userStoryUpvotes.userStoryId, mergeId));
+
+      const keepUpvotes = await db
+        .select()
+        .from(userStoryUpvotes)
+        .where(eq(userStoryUpvotes.userStoryId, keepId));
+
+      const keepSessionTokens = new Set(keepUpvotes.map(u => u.sessionToken));
+      
+      // Add unique upvotes to the keep story
+      for (const upvote of mergeUpvotes) {
+        if (!keepSessionTokens.has(upvote.sessionToken)) {
+          await db
+            .insert(userStoryUpvotes)
+            .values({
+              userStoryId: keepId,
+              sessionToken: upvote.sessionToken,
+            });
+        }
+      }
+
+      // Mark the merged story as merged into the keep story
+      const [mergedStory] = await db
+        .update(userStories)
+        .set({
+          mergedIntoId: keepId,
+          updatedAt: new Date(),
+        })
+        .where(eq(userStories.id, mergeId))
+        .returning();
+
+      // Return the updated keep story
+      const [keepStory] = await db
+        .select()
+        .from(userStories)
+        .where(eq(userStories.id, keepId));
+
+      return keepStory;
+    } catch (error) {
+      console.error("Error merging user stories:", error);
+      return undefined;
+    }
   }
 }
 

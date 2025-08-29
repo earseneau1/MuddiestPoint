@@ -8,6 +8,7 @@ import Submit from "@/pages/submit";
 import ProfessorDashboard from "@/pages/professor-dashboard";
 import Professor from "@/pages/professor";
 import ClassSession from "@/pages/class-session";
+import UserStories from "@/pages/user-stories";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/class-session" component={ClassSession} />
       <Route path="/professor" component={Professor} />
       <Route path="/professor/dashboard" component={ProfessorDashboard} />
+      <Route path="/user-stories" component={UserStories} />
       <Route path="/track/:token" component={Submit} />
       <Route component={NotFound} />
     </Switch>
