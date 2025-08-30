@@ -42,6 +42,7 @@ export interface IStorage {
   getSubmissions(courseId?: string, limit?: number): Promise<SubmissionWithCourse[]>;
   getSubmission(id: string): Promise<SubmissionWithCourse | undefined>;
   createSubmission(submission: InsertSubmission, ipAddressHash: string): Promise<Submission>;
+  updateSubmission(id: string, updates: Partial<Pick<InsertSubmission, 'topic' | 'confusion' | 'difficultyLevel'>>, ipAddressHash: string): Promise<Submission | undefined>;
   // Rate Limiting for Anonymous Submissions
   checkRateLimit(sessionId: string, ipAddressHash: string): Promise<{ allowed: boolean; reason?: string }>;
   updateRateLimit(sessionId: string, ipAddressHash: string): Promise<void>;
@@ -111,6 +112,7 @@ export class DatabaseStorage implements IStorage {
         sessionId: submissions.sessionId,
         ipAddressHash: submissions.ipAddressHash,
         createdAt: submissions.createdAt,
+        updatedAt: submissions.updatedAt,
         course: {
           id: courses.id,
           name: courses.name,
@@ -141,6 +143,7 @@ export class DatabaseStorage implements IStorage {
         sessionId: submissions.sessionId,
         ipAddressHash: submissions.ipAddressHash,
         createdAt: submissions.createdAt,
+        updatedAt: submissions.updatedAt,
         course: {
           id: courses.id,
           name: courses.name,
@@ -164,6 +167,42 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return submission;
+  }
+
+  async updateSubmission(id: string, updates: Partial<Pick<InsertSubmission, 'topic' | 'confusion' | 'difficultyLevel'>>, ipAddressHash: string): Promise<Submission | undefined> {
+    // First check if the submission exists and verify IP address
+    const [existingSubmission] = await db
+      .select()
+      .from(submissions)
+      .where(eq(submissions.id, id));
+
+    if (!existingSubmission) {
+      return undefined; // Submission not found
+    }
+
+    // Verify IP address matches (same user in session)
+    if (existingSubmission.ipAddressHash !== ipAddressHash) {
+      return undefined; // Not the same user who created the submission
+    }
+
+    // Check if submission is within edit time window (2 hours)
+    const now = new Date();
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    if (existingSubmission.createdAt < twoHoursAgo) {
+      return undefined; // Submission too old to edit
+    }
+
+    // Update the submission
+    const [updatedSubmission] = await db
+      .update(submissions)
+      .set({
+        ...updates,
+        updatedAt: now,
+      })
+      .where(eq(submissions.id, id))
+      .returning();
+
+    return updatedSubmission;
   }
 
   // Rate limiting functions for anonymous submissions

@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertSubmissionSchema } from "@shared/schema";
@@ -27,7 +28,9 @@ import {
   Sparkles,
   BookOpen,
   Clock,
-  Users
+  Users,
+  Edit3,
+  RotateCcw
 } from "lucide-react";
 import { z } from "zod";
 
@@ -41,6 +44,8 @@ export default function ClassSession() {
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [isImprovingText, setIsImprovingText] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string>("");
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentSubmissionId, setCurrentSubmissionId] = useState<string | null>(null);
 
   // Get courseId and sessionId from URL params
   const urlParams = new URLSearchParams(location.split('?')[1] || '');
@@ -49,6 +54,16 @@ export default function ClassSession() {
 
   const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
+  });
+
+  // Query for existing submission when in edit mode
+  const { data: existingSubmission, isLoading: submissionLoading } = useQuery({
+    queryKey: ["/api/submissions", currentSubmissionId],
+    queryFn: async () => {
+      if (!currentSubmissionId) return null;
+      return await apiRequest(`/api/submissions/${currentSubmissionId}`, 'GET');
+    },
+    enabled: !!currentSubmissionId,
   });
 
   const selectedCourse = courses.find(course => course.id === finalCourseId);
@@ -64,7 +79,7 @@ export default function ClassSession() {
     },
   });
 
-  // Pre-select course and session if provided
+  // Pre-select course and session if provided, and check for existing submission
   useEffect(() => {
     if (finalCourseId && courses.length > 0) {
       const courseExists = courses.find(course => course.id === finalCourseId);
@@ -74,8 +89,26 @@ export default function ClassSession() {
     }
     if (sessionId) {
       form.setValue('sessionId', sessionId);
+      
+      // Check if there's an existing submission for this session
+      const storageKey = `submission_${sessionId}`;
+      const existingSubmissionId = sessionStorage.getItem(storageKey);
+      if (existingSubmissionId) {
+        setCurrentSubmissionId(existingSubmissionId);
+        // We'll load the submission data in a separate effect
+      }
     }
   }, [finalCourseId, sessionId, courses, form]);
+
+  // Load existing submission data into form when available
+  useEffect(() => {
+    if (existingSubmission && !submissionLoading) {
+      form.setValue('topic', existingSubmission.topic);
+      form.setValue('confusion', existingSubmission.confusion);
+      form.setValue('difficultyLevel', existingSubmission.difficultyLevel);
+      setIsEditMode(true);
+    }
+  }, [existingSubmission, submissionLoading, form]);
 
   const generateSuggestionsMutation = useMutation({
     mutationFn: async ({ topic, difficultyLevel }: { topic: string; difficultyLevel: string }): Promise<{ suggestions: string[] }> => {
@@ -123,6 +156,33 @@ export default function ClassSession() {
     },
   });
 
+  // Update mutation for editing existing submissions
+  const updateMutation = useMutation({
+    mutationFn: async (data: Partial<Pick<SubmissionData, 'topic' | 'confusion' | 'difficultyLevel'>>) => {
+      if (!currentSubmissionId) {
+        throw new Error("No submission ID for update");
+      }
+      return await apiRequest(`/api/submissions/${currentSubmissionId}`, 'PUT', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions", currentSubmissionId] });
+      setAiSuggestions([]);
+      setSelectedSuggestion("");
+      toast({
+        title: "Updated!",
+        description: "Your feedback has been updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update feedback",
+        variant: "destructive",
+      });
+    },
+  });
+
   const submitMutation = useMutation({
     mutationFn: async (data: SubmissionData) => {
       // Validate that sessionId is present
@@ -130,17 +190,35 @@ export default function ClassSession() {
         throw new Error("Session ID is required for submission");
       }
       
-      return await apiRequest('/api/submissions', 'POST', data);
+      if (isEditMode && currentSubmissionId) {
+        // Update existing submission
+        return await updateMutation.mutateAsync({
+          topic: data.topic,
+          confusion: data.confusion,
+          difficultyLevel: data.difficultyLevel,
+        });
+      } else {
+        // Create new submission
+        return await apiRequest('/api/submissions', 'POST', data);
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
-      form.reset();
-      setAiSuggestions([]);
-      setSelectedSuggestion("");
-      toast({
-        title: "Success!",
-        description: "Your feedback has been submitted anonymously",
-      });
+      
+      if (!isEditMode) {
+        // Store submission ID in sessionStorage for editing capability (only for new submissions)
+        if (data?.id && sessionId) {
+          const storageKey = `submission_${sessionId}`;
+          sessionStorage.setItem(storageKey, data.id);
+          setCurrentSubmissionId(data.id);
+          setIsEditMode(true);
+        }
+        
+        toast({
+          title: "Success!",
+          description: "Your feedback has been submitted! You can edit it anytime while you stay on this page.",
+        });
+      }
     },
     onError: () => {
       toast({
@@ -194,6 +272,28 @@ export default function ClassSession() {
     submitMutation.mutate(data);
   };
 
+  const handleClearSubmission = () => {
+    if (sessionId) {
+      const storageKey = `submission_${sessionId}`;
+      sessionStorage.removeItem(storageKey);
+    }
+    setCurrentSubmissionId(null);
+    setIsEditMode(false);
+    form.reset({
+      courseId: finalCourseId || undefined,
+      sessionId: sessionId || undefined,
+      topic: "",
+      confusion: "",
+      difficultyLevel: undefined,
+    });
+    setAiSuggestions([]);
+    setSelectedSuggestion("");
+    toast({
+      title: "Cleared",
+      description: "Starting fresh with a new feedback submission.",
+    });
+  };
+
   if (coursesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#f8faf9] to-[#e8f0ea] flex items-center justify-center">
@@ -234,9 +334,33 @@ export default function ClassSession() {
               <CardHeader className="bg-[#2d5a3d] text-white rounded-t-lg">
                 <CardTitle className="flex items-center gap-2">
                   <MessageCircle className="h-5 w-5" />
-                  Submit Your Feedback
+                  {isEditMode ? "Edit Your Feedback" : "Submit Your Feedback"}
                 </CardTitle>
               </CardHeader>
+              
+              {isEditMode && (
+                <div className="p-4 border-b">
+                  <Alert className="border-blue-200 bg-blue-50">
+                    <Edit3 className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      <div className="flex items-center justify-between">
+                        <span>You're editing your existing feedback submission.</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleClearSubmission}
+                          className="ml-2 h-7 px-2 text-xs border-blue-300 text-blue-700 hover:bg-blue-100"
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          Start Fresh
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+              
               <CardContent className="p-6">
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -421,7 +545,7 @@ export default function ClassSession() {
                       ) : (
                         <Send className="h-4 w-4 mr-2" />
                       )}
-                      Submit Anonymous Feedback
+                      {isEditMode ? "Update Feedback" : "Submit Anonymous Feedback"}
                     </Button>
                   </form>
                 </Form>

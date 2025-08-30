@@ -49,6 +49,7 @@ export const submissions = pgTable("submissions", {
   difficultyLevel: text("difficulty_level").notNull(), // 'slightly', 'very', 'completely'
   ipAddressHash: varchar("ip_address_hash").notNull(), // Hashed IP for rate limiting
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const magicLinks = pgTable("magic_links", {

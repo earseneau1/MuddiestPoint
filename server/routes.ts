@@ -155,6 +155,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update submission (session-based editing)
+  app.put("/api/submissions/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateSchema = insertSubmissionSchema.pick({
+        topic: true,
+        confusion: true,
+        difficultyLevel: true
+      });
+      const data = updateSchema.parse(req.body);
+      
+      // Get client IP address for verification
+      const clientIP = req.ip || req.connection.remoteAddress || '127.0.0.1';
+      const ipAddressHash = await storage.hashIPAddress(clientIP);
+      
+      // Update submission (includes IP verification and time window check)
+      const updatedSubmission = await storage.updateSubmission(id, data, ipAddressHash);
+      
+      if (!updatedSubmission) {
+        res.status(404).json({ error: "Submission not found, not editable, or access denied" });
+        return;
+      }
+      
+      res.json(updatedSubmission);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        console.error("Error updating submission:", error);
+        res.status(500).json({ error: "Failed to update submission" });
+      }
+    }
+  });
+
 
   // Class Sessions (Daily Links)
   app.get("/api/courses/:courseId/sessions", async (req, res) => {
