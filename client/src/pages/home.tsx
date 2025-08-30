@@ -1,12 +1,7 @@
-import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { Card, CardContent } from "@/components/ui/card";
 import { 
   Shield, 
   MessageCircle, 
@@ -18,51 +13,10 @@ import {
   ArrowRight,
   BookOpen,
   Target,
-  Lightbulb,
-  Search,
-  Mail,
-  Key
+  Lightbulb
 } from "lucide-react";
 
 export default function Home() {
-  const [courseCode, setCourseCode] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
-
-  const handleCourseCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!courseCode.trim()) return;
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/courses?code=${encodeURIComponent(courseCode.trim())}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch courses');
-      }
-      const courses = await response.json();
-      
-      if (courses.length === 0) {
-        toast({
-          title: "Course not found",
-          description: `No course found with code "${courseCode.trim()}". Please check the course code and try again.`,
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Navigate to submit page with the course ID
-      setLocation(`/submit?courseId=${courses[0].id}`);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to find course. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,69 +26,21 @@ export default function Home() {
       <section className="container mx-auto px-4 py-16 text-center max-w-6xl">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-5xl md:text-6xl font-serif font-bold text-foreground mb-6 leading-tight">
-            Bridge the Gap Between{" "}
-            <span className="text-primary">Teaching</span> and{" "}
-            <span className="text-accent">Learning</span>
+            Speak Freely with Your{" "}
+            <span className="text-primary">Professor</span>{" "}
+            <span className="text-accent">Anonymously</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8 leading-relaxed max-w-3xl mx-auto">
-            Muddiest Point empowers students to share confusion anonymously while giving professors 
-            real-time insights to improve teaching effectiveness throughout the semester.
+            Share your confusion and concerns without fear of judgment. Help your professors understand 
+            what's unclear while maintaining complete privacy and anonymity.
           </p>
           
-          {/* Course Access */}
-          <div className="flex justify-center mb-8 max-w-2xl mx-auto">
-            <Card className="bg-card/50 border w-full">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg font-serif flex items-center gap-2">
-                  <Search className="h-5 w-5 text-primary" />
-                  Find Your Course
-                </CardTitle>
-                <CardDescription className="text-sm">
-                  Enter your course code to jump directly to feedback submission
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCourseCodeSubmit} className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="courseCode" className="text-sm">Course Code</Label>
-                    <Input
-                      id="courseCode"
-                      type="text"
-                      placeholder="e.g., COSC 1337"
-                      value={courseCode}
-                      onChange={(e) => setCourseCode(e.target.value)}
-                      disabled={isLoading}
-                      className="text-sm"
-                      data-testid="input-course-code"
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading || !courseCode.trim()} 
-                    className="w-full"
-                    size="sm"
-                    data-testid="button-find-course"
-                  >
-                    {isLoading ? (
-                      <>Finding Course...</>
-                    ) : (
-                      <>
-                        <ArrowRight className="h-4 w-4 mr-2" />
-                        Submit Feedback
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-          </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-            <Link href="/submit">
+            <Link href="/course-search">
               <Button size="lg" className="px-8 py-6 text-lg font-medium" data-testid="button-student-submit">
                 <MessageCircle className="h-5 w-5 mr-2" />
-                Submit Feedback as Student
+                Find My Course & Submit Feedback
               </Button>
             </Link>
             <Link href="/professor">
@@ -335,9 +241,9 @@ export default function Home() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/submit">
+            <Link href="/course-search">
               <Button size="lg" className="px-8 py-6" data-testid="button-get-started-student">
-                Get Started as Student
+                Find Your Course
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </Link>

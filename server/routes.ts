@@ -78,6 +78,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/courses/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const course = await storage.getCourse(id);
+      if (course) {
+        res.json(course);
+      } else {
+        res.status(404).json({ error: "Course not found" });
+      }
+    } catch (error) {
+      console.error("Error fetching course:", error);
+      res.status(500).json({ error: "Failed to fetch course" });
+    }
+  });
+
   app.put("/api/courses/:id", async (req, res) => {
     try {
       const { id } = req.params;

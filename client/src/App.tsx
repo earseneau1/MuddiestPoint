@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Footer from "@/components/footer";
 import Home from "@/pages/home";
 import Submit from "@/pages/submit";
+import CourseSearch from "@/pages/course-search";
+import CourseDetail from "@/pages/course-detail";
 import ProfessorDashboard from "@/pages/professor-dashboard";
 import Professor from "@/pages/professor";
 import ClassSession from "@/pages/class-session";
@@ -18,6 +20,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/submit" component={Submit} />
+      <Route path="/course-search" component={CourseSearch} />
+      <Route path="/courses/:id" component={CourseDetail} />
       <Route path="/class-session" component={ClassSession} />
       <Route path="/professor" component={Professor} />
       <Route path="/professor/dashboard" component={ProfessorDashboard} />
