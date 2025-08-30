@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Link } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
 import { 
   Plus, 
   ChevronUp, 
@@ -54,7 +53,10 @@ const statusConfig: Record<StoryStatus, { label: string; color: string; icon: an
 
 export default function UserStories() {
   const { toast } = useToast();
-  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuth();
+  // Anonymous mode - no authentication
+  const user = null;
+  const isAuthLoading = false;
+  const isAuthenticated = false;
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showForm, setShowForm] = useState(false);
   const [isOwner, setIsOwner] = useState(false);

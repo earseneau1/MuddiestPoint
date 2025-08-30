@@ -4,6 +4,7 @@ import {
   magicLinks,
   anonymousSessions,
   classSessions,
+  submissionRateLimits,
   userStories,
   userStoryUpvotes,
   users,
@@ -40,18 +41,11 @@ export interface IStorage {
   // Submissions
   getSubmissions(courseId?: string, limit?: number): Promise<SubmissionWithCourse[]>;
   getSubmission(id: string): Promise<SubmissionWithCourse | undefined>;
-  createSubmission(submission: InsertSubmission): Promise<Submission>;
-  getSubmissionsByMagicLink(magicLinkId: string): Promise<SubmissionWithCourse[]>;
-
-  // Magic Links
-  getMagicLink(token: string): Promise<MagicLink | undefined>;
-  createMagicLink(magicLink: InsertMagicLink): Promise<MagicLink>;
-  updateMagicLinkLastUsed(id: string): Promise<void>;
-
-  // Anonymous Sessions (privacy-first)
-  getAnonymousSession(token: string): Promise<AnonymousSession | undefined>;
-  createAnonymousSession(session: InsertAnonymousSession): Promise<AnonymousSession>;
-  updateAnonymousSessionLastUsed(id: string): Promise<void>;
+  createSubmission(submission: InsertSubmission, ipAddressHash: string): Promise<Submission>;
+  // Rate Limiting for Anonymous Submissions
+  checkRateLimit(sessionId: string, ipAddressHash: string): Promise<{ allowed: boolean; reason?: string }>;
+  updateRateLimit(sessionId: string, ipAddressHash: string): Promise<void>;
+  hashIPAddress(ipAddress: string): Promise<string>;
 
   // Class Sessions (Daily Links)
   getClassSessions(courseId: string): Promise<ClassSession[]>;
@@ -114,8 +108,8 @@ export class DatabaseStorage implements IStorage {
         topic: submissions.topic,
         confusion: submissions.confusion,
         difficultyLevel: submissions.difficultyLevel,
-        magicLinkId: submissions.magicLinkId,
-        anonymousSessionId: submissions.anonymousSessionId,
+        sessionId: submissions.sessionId,
+        ipAddressHash: submissions.ipAddressHash,
         createdAt: submissions.createdAt,
         course: {
           id: courses.id,
@@ -144,8 +138,8 @@ export class DatabaseStorage implements IStorage {
         topic: submissions.topic,
         confusion: submissions.confusion,
         difficultyLevel: submissions.difficultyLevel,
-        magicLinkId: submissions.magicLinkId,
-        anonymousSessionId: submissions.anonymousSessionId,
+        sessionId: submissions.sessionId,
+        ipAddressHash: submissions.ipAddressHash,
         createdAt: submissions.createdAt,
         course: {
           id: courses.id,
@@ -161,85 +155,89 @@ export class DatabaseStorage implements IStorage {
     return result ? { ...result, course: result.course! } : undefined;
   }
 
-  async createSubmission(insertSubmission: InsertSubmission): Promise<Submission> {
+  async createSubmission(insertSubmission: InsertSubmission, ipAddressHash: string): Promise<Submission> {
     const [submission] = await db
       .insert(submissions)
-      .values(insertSubmission)
+      .values({
+        ...insertSubmission,
+        ipAddressHash,
+      })
       .returning();
     return submission;
   }
 
-  async getSubmissionsByMagicLink(magicLinkId: string): Promise<SubmissionWithCourse[]> {
-    const results = await db
-      .select({
-        id: submissions.id,
-        courseId: submissions.courseId,
-        topic: submissions.topic,
-        confusion: submissions.confusion,
-        difficultyLevel: submissions.difficultyLevel,
-        magicLinkId: submissions.magicLinkId,
-        anonymousSessionId: submissions.anonymousSessionId,
-        createdAt: submissions.createdAt,
-        course: {
-          id: courses.id,
-          name: courses.name,
-          code: courses.code,
-          createdAt: courses.createdAt,
-        },
+  // Rate limiting functions for anonymous submissions
+  async checkRateLimit(sessionId: string, ipAddressHash: string): Promise<{ allowed: boolean; reason?: string }> {
+    const now = new Date();
+    const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+
+    // Check existing rate limit record
+    const [rateLimit] = await db
+      .select()
+      .from(submissionRateLimits)
+      .where(
+        and(
+          eq(submissionRateLimits.sessionId, sessionId),
+          eq(submissionRateLimits.ipAddress, ipAddressHash)
+        )
+      );
+
+    if (!rateLimit) {
+      // No previous submissions, allowed
+      return { allowed: true };
+    }
+
+    // Check if max submissions (3) reached for this session
+    if (rateLimit.submissionCount >= 3) {
+      return { allowed: false, reason: "Maximum of 3 submissions allowed per session" };
+    }
+
+    // Check if last submission was within 15 minutes
+    if (rateLimit.lastSubmissionAt > fifteenMinutesAgo) {
+      const minutesRemaining = Math.ceil((rateLimit.lastSubmissionAt.getTime() + 15 * 60 * 1000 - now.getTime()) / 60000);
+      return { allowed: false, reason: `Please wait ${minutesRemaining} more minutes before submitting again` };
+    }
+
+    return { allowed: true };
+  }
+
+  async updateRateLimit(sessionId: string, ipAddressHash: string): Promise<void> {
+    const now = new Date();
+
+    // Try to update existing record
+    const result = await db
+      .update(submissionRateLimits)
+      .set({
+        submissionCount: sql`${submissionRateLimits.submissionCount} + 1`,
+        lastSubmissionAt: now,
       })
-      .from(submissions)
-      .leftJoin(courses, eq(submissions.courseId, courses.id))
-      .where(eq(submissions.magicLinkId, magicLinkId))
-      .orderBy(desc(submissions.createdAt));
+      .where(
+        and(
+          eq(submissionRateLimits.sessionId, sessionId),
+          eq(submissionRateLimits.ipAddress, ipAddressHash)
+        )
+      );
 
-    return results.map(r => ({
-      ...r,
-      course: r.course!,
-    }));
+    // If no record existed, create one
+    if (result.rowCount === 0) {
+      await db
+        .insert(submissionRateLimits)
+        .values({
+          sessionId,
+          ipAddress: ipAddressHash,
+          submissionCount: 1,
+          lastSubmissionAt: now,
+        });
+    }
   }
 
-  async getMagicLink(token: string): Promise<MagicLink | undefined> {
-    const [magicLink] = await db.select().from(magicLinks).where(eq(magicLinks.token, token));
-    return magicLink || undefined;
+
+  // Helper function to hash IP addresses for privacy
+  async hashIPAddress(ipAddress: string): Promise<string> {
+    const crypto = await import('crypto');
+    return crypto.createHash('sha256').update(ipAddress + process.env.SESSION_SECRET).digest('hex');
   }
 
-  async createMagicLink(insertMagicLink: InsertMagicLink): Promise<MagicLink> {
-    const [magicLink] = await db
-      .insert(magicLinks)
-      .values({
-        ...insertMagicLink,
-        token: randomUUID(),
-      })
-      .returning();
-    return magicLink;
-  }
-
-  async updateMagicLinkLastUsed(id: string): Promise<void> {
-    await db
-      .update(magicLinks)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(magicLinks.id, id));
-  }
-
-  async getAnonymousSession(token: string): Promise<AnonymousSession | undefined> {
-    const [session] = await db.select().from(anonymousSessions).where(eq(anonymousSessions.anonymousToken, token));
-    return session || undefined;
-  }
-
-  async createAnonymousSession(insertSession: InsertAnonymousSession): Promise<AnonymousSession> {
-    const [session] = await db
-      .insert(anonymousSessions)
-      .values(insertSession)
-      .returning();
-    return session;
-  }
-
-  async updateAnonymousSessionLastUsed(id: string): Promise<void> {
-    await db
-      .update(anonymousSessions)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(anonymousSessions.id, id));
-  }
 
   async getSubmissionStats(): Promise<{
     totalSubmissions: number;

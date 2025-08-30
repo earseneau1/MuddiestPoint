@@ -42,59 +42,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Anonymous authentication for students
-  app.post('/api/auth/anonymous', async (req, res) => {
-    try {
-      const { email } = req.body;
-      
-      // Verify it's a TCU email
-      if (!email || !email.endsWith('@tcu.edu')) {
-        res.status(400).json({ error: 'Only @tcu.edu email addresses are allowed' });
-        return;
-      }
-      
-      // Create anonymous session - hash the email for privacy
-      const crypto = await import('crypto');
-      const hashedEmail = crypto.createHash('sha256').update(email).digest('hex');
-      const anonymousToken = 'anon_' + crypto.randomBytes(16).toString('hex');
-      
-      // Store anonymous session
-      const session = await storage.createAnonymousSession({
-        anonymousToken: anonymousToken,
-      });
-      
-      res.json({
-        token: anonymousToken,
-        sessionId: session.id,
-        // Never send back the actual email or hashed email
-      });
-    } catch (error) {
-      console.error("Error creating anonymous session:", error);
-      res.status(500).json({ error: "Failed to create anonymous session" });
-    }
-  });
-
-  // Get anonymous session status
-  app.get('/api/auth/anonymous/:token', async (req, res) => {
-    try {
-      const { token } = req.params;
-      const session = await storage.getAnonymousSession(token);
-      
-      if (!session) {
-        res.status(404).json({ error: 'Session not found' });
-        return;
-      }
-      
-      res.json({
-        valid: true,
-        sessionId: session.id,
-        // Never expose the hashed identifier
-      });
-    } catch (error) {
-      console.error("Error getting anonymous session:", error);
-      res.status(500).json({ error: "Failed to get session" });
-    }
-  });
   
   // Courses
   app.get("/api/courses", async (req, res) => {
@@ -179,62 +126,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/submissions", async (req, res) => {
     try {
       const data = insertSubmissionSchema.parse(req.body);
-      const submission = await storage.createSubmission(data);
+      
+      // Get client IP address for rate limiting
+      const clientIP = req.ip || req.connection.remoteAddress || '127.0.0.1';
+      const ipAddressHash = await storage.hashIPAddress(clientIP);
+      
+      // Check rate limits
+      const rateLimitCheck = await storage.checkRateLimit(data.sessionId, ipAddressHash);
+      if (!rateLimitCheck.allowed) {
+        res.status(429).json({ error: rateLimitCheck.reason });
+        return;
+      }
+      
+      // Create submission
+      const submission = await storage.createSubmission(data, ipAddressHash);
+      
+      // Update rate limit counters
+      await storage.updateRateLimit(data.sessionId, ipAddressHash);
+      
       res.status(201).json(submission);
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: error.errors });
       } else {
+        console.error("Error creating submission:", error);
         res.status(500).json({ error: "Failed to create submission" });
       }
     }
   });
 
-  // Magic Links
-  app.post("/api/magic-links", async (req, res) => {
-    try {
-      const data = insertMagicLinkSchema.parse(req.body);
-      const magicLink = await storage.createMagicLink(data);
-      
-      // In a real app, you would send an email with the magic link here
-      // For now, we'll just return the token
-      const magicUrl = `${req.protocol}://${req.get('host')}/track/${magicLink.token}`;
-      
-      res.status(201).json({ 
-        id: magicLink.id,
-        magicUrl,
-        message: "Magic link created successfully" 
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: error.errors });
-      } else {
-        res.status(500).json({ error: "Failed to create magic link" });
-      }
-    }
-  });
-
-  app.get("/api/magic-links/:token", async (req, res) => {
-    try {
-      const { token } = req.params;
-      const magicLink = await storage.getMagicLink(token);
-      
-      if (!magicLink) {
-        res.status(404).json({ error: "Magic link not found" });
-        return;
-      }
-
-      await storage.updateMagicLinkLastUsed(magicLink.id);
-      const submissions = await storage.getSubmissionsByMagicLink(magicLink.id);
-      
-      res.json({
-        magicLink,
-        submissions,
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch magic link data" });
-    }
-  });
 
   // Class Sessions (Daily Links)
   app.get("/api/courses/:courseId/sessions", async (req, res) => {
@@ -310,8 +230,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      // Redirect to class session page with course pre-selected
-      res.redirect(`/class-session?courseId=${course.id}`);
+      // Redirect to class session page with session ID and course pre-selected  
+      res.redirect(`/class-session?sessionId=${session.id}&courseId=${course.id}`);
     } catch (error) {
       res.status(500).json({ error: "Failed to access class session" });
     }

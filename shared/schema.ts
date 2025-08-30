@@ -43,11 +43,11 @@ export const courses = pgTable("courses", {
 export const submissions = pgTable("submissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   courseId: varchar("course_id").notNull().references(() => courses.id),
+  sessionId: varchar("session_id").notNull().references(() => classSessions.id),
   topic: text("topic").notNull(),
   confusion: text("confusion").notNull(),
   difficultyLevel: text("difficulty_level").notNull(), // 'slightly', 'very', 'completely'
-  magicLinkId: varchar("magic_link_id").references(() => magicLinks.id),
-  anonymousSessionId: varchar("anonymous_session_id").references(() => anonymousSessions.id),
+  ipAddressHash: varchar("ip_address_hash").notNull(), // Hashed IP for rate limiting
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -70,18 +70,26 @@ export const classSessions = pgTable("class_sessions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Rate limiting for anonymous submissions
+export const submissionRateLimits = pgTable("submission_rate_limits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => classSessions.id),
+  ipAddress: varchar("ip_address").notNull(), // Hashed for privacy
+  submissionCount: integer("submission_count").notNull().default(0),
+  lastSubmissionAt: timestamp("last_submission_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_rate_limit_session_ip").on(table.sessionId, table.ipAddress),
+]);
+
 export const submissionsRelations = relations(submissions, ({ one }) => ({
   course: one(courses, {
     fields: [submissions.courseId],
     references: [courses.id],
   }),
-  magicLink: one(magicLinks, {
-    fields: [submissions.magicLinkId],
-    references: [magicLinks.id],
-  }),
-  anonymousSession: one(anonymousSessions, {
-    fields: [submissions.anonymousSessionId],
-    references: [anonymousSessions.id],
+  session: one(classSessions, {
+    fields: [submissions.sessionId],
+    references: [classSessions.id],
   }),
 }));
 
@@ -98,10 +106,19 @@ export const anonymousSessionsRelations = relations(anonymousSessions, ({ many }
   submissions: many(submissions),
 }));
 
-export const classSessionsRelations = relations(classSessions, ({ one }) => ({
+export const classSessionsRelations = relations(classSessions, ({ one, many }) => ({
   course: one(courses, {
     fields: [classSessions.courseId],
     references: [courses.id],
+  }),
+  submissions: many(submissions),
+  rateLimits: many(submissionRateLimits),
+}));
+
+export const submissionRateLimitsRelations = relations(submissionRateLimits, ({ one }) => ({
+  session: one(classSessions, {
+    fields: [submissionRateLimits.sessionId],
+    references: [classSessions.id],
   }),
 }));
 
@@ -114,10 +131,9 @@ export const insertCourseSchema = createInsertSchema(courses).omit({
 export const insertSubmissionSchema = createInsertSchema(submissions).omit({
   id: true,
   createdAt: true,
+  ipAddressHash: true, // Generated on server
 }).extend({
   difficultyLevel: z.enum(['slightly', 'very', 'completely']),
-}).partial({
-  anonymousSessionId: true,
 });
 
 export const insertMagicLinkSchema = createInsertSchema(magicLinks).omit({
@@ -138,6 +154,11 @@ export const insertClassSessionSchema = createInsertSchema(classSessions).omit({
   accessToken: true,
 });
 
+export const insertSubmissionRateLimitSchema = createInsertSchema(submissionRateLimits).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Course = typeof courses.$inferSelect;
 export type InsertCourse = z.infer<typeof insertCourseSchema>;
@@ -149,6 +170,8 @@ export type AnonymousSession = typeof anonymousSessions.$inferSelect;
 export type InsertAnonymousSession = z.infer<typeof insertAnonymousSessionSchema>;
 export type ClassSession = typeof classSessions.$inferSelect;
 export type InsertClassSession = z.infer<typeof insertClassSessionSchema>;
+export type SubmissionRateLimit = typeof submissionRateLimits.$inferSelect;
+export type InsertSubmissionRateLimit = z.infer<typeof insertSubmissionRateLimitSchema>;
 
 // User Stories for feature management
 export const userStories = pgTable("user_stories", {
@@ -161,7 +184,7 @@ export const userStories = pgTable("user_stories", {
   ease: integer("ease").notNull(), // 1-10 scale
   status: text("status").notNull().default('submitted'), // submitted, in_review, accepted, in_progress, on_hold, done
   sessionToken: text("session_token").notNull(), // Track who submitted
-  mergedIntoId: varchar("merged_into_id").references(() => userStories.id), // For tracking merges
+  mergedIntoId: varchar("merged_into_id"), // For tracking merges
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

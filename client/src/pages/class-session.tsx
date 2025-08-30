@@ -31,11 +31,7 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 
-const submissionSchema = insertSubmissionSchema.extend({
-  createMagicLink: z.boolean().default(false),
-});
-
-type SubmissionData = z.infer<typeof submissionSchema>;
+type SubmissionData = z.infer<typeof insertSubmissionSchema>;
 
 export default function ClassSession() {
   const [location] = useLocation();
@@ -46,9 +42,10 @@ export default function ClassSession() {
   const [isImprovingText, setIsImprovingText] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string>("");
 
-  // Get courseId from URL params
+  // Get courseId and sessionId from URL params
   const urlParams = new URLSearchParams(location.split('?')[1] || '');
   const finalCourseId = urlParams.get('courseId');
+  const sessionId = urlParams.get('sessionId');
 
   const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
@@ -57,17 +54,17 @@ export default function ClassSession() {
   const selectedCourse = courses.find(course => course.id === finalCourseId);
 
   const form = useForm<SubmissionData>({
-    resolver: zodResolver(submissionSchema),
+    resolver: zodResolver(insertSubmissionSchema),
     defaultValues: {
       courseId: "",
+      sessionId: "",
       topic: "",
       confusion: "",
       difficultyLevel: undefined,
-      createMagicLink: false,
     },
   });
 
-  // Pre-select course if courseId is provided
+  // Pre-select course and session if provided
   useEffect(() => {
     if (finalCourseId && courses.length > 0) {
       const courseExists = courses.find(course => course.id === finalCourseId);
@@ -75,7 +72,10 @@ export default function ClassSession() {
         form.setValue('courseId', finalCourseId);
       }
     }
-  }, [finalCourseId, courses, form]);
+    if (sessionId) {
+      form.setValue('sessionId', sessionId);
+    }
+  }, [finalCourseId, sessionId, courses, form]);
 
   const generateSuggestionsMutation = useMutation({
     mutationFn: async ({ topic, difficultyLevel }: { topic: string; difficultyLevel: string }): Promise<{ suggestions: string[] }> => {
@@ -84,8 +84,8 @@ export default function ClassSession() {
         confusionLevel: difficultyLevel,
       });
     },
-    onSuccess: (data: { suggestions: string[] }) => {
-      setAiSuggestions(data.suggestions);
+    onSuccess: (data) => {
+      setAiSuggestions(data.suggestions || []);
       setIsGeneratingSuggestions(false);
     },
     onError: () => {
@@ -105,8 +105,8 @@ export default function ClassSession() {
         topic,
       });
     },
-    onSuccess: (data: { improvedText: string }) => {
-      form.setValue('confusion', data.improvedText);
+    onSuccess: (data) => {
+      form.setValue('confusion', data.improvedText || '');
       setIsImprovingText(false);
       toast({
         title: "Feedback Improved!",
@@ -125,23 +125,12 @@ export default function ClassSession() {
 
   const submitMutation = useMutation({
     mutationFn: async (data: SubmissionData) => {
-      let magicLinkId: string | undefined;
-      
-      if (data.createMagicLink) {
-        try {
-          const magicLinkResponse: any = await apiRequest('/api/magic-links', 'POST', {
-            token: Math.random().toString(36).substring(2, 15),
-          });
-          magicLinkId = magicLinkResponse.id;
-        } catch (error) {
-          console.warn("Failed to create magic link, continuing without it");
-        }
+      // Validate that sessionId is present
+      if (!data.sessionId) {
+        throw new Error("Session ID is required for submission");
       }
-
-      return await apiRequest('/api/submissions', 'POST', {
-        ...data,
-        magicLinkId,
-      });
+      
+      return await apiRequest('/api/submissions', 'POST', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
@@ -420,31 +409,6 @@ export default function ClassSession() {
                       )}
                     />
 
-                    <div className="flex items-center space-x-2">
-                      <FormField
-                        control={form.control}
-                        name="createMagicLink"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid="checkbox-magic-link"
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel className="text-sm font-normal">
-                                Get a private link to track your submissions (optional)
-                              </FormLabel>
-                              <p className="text-xs text-muted-foreground">
-                                Creates a unique link just for you to see your past feedback
-                              </p>
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
 
                     <Button 
                       type="submit" 

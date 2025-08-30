@@ -29,60 +29,6 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [anonymousEmail, setAnonymousEmail] = useState("");
-  const [isAnonymousVerified, setIsAnonymousVerified] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  // Check if user has an anonymous session
-  useEffect(() => {
-    const token = localStorage.getItem('anonymousToken');
-    if (token) {
-      setIsAnonymousVerified(true);
-    }
-  }, []);
-
-  const handleAnonymousVerification = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!anonymousEmail.trim()) return;
-
-    setIsVerifying(true);
-    try {
-      const response = await fetch('/api/auth/anonymous', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: anonymousEmail }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to verify');
-      }
-
-      const data = await response.json();
-      
-      // Store the anonymous token in localStorage
-      localStorage.setItem('anonymousToken', data.token);
-      setIsAnonymousVerified(true);
-      
-      toast({
-        title: "Verification Successful",
-        description: "You can now submit feedback anonymously. Your identity is protected.",
-        className: "bg-green-50 dark:bg-green-950",
-      });
-      
-      setAnonymousEmail("");
-    } catch (error: any) {
-      toast({
-        title: "Verification Failed",
-        description: error.message || "Only @tcu.edu email addresses are allowed.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
 
   const handleCourseCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,113 +81,53 @@ export default function Home() {
             real-time insights to improve teaching effectiveness throughout the semester.
           </p>
           
-          {/* Anonymous Verification & Quick Course Access */}
-          <div className="grid md:grid-cols-2 gap-4 mb-8 max-w-4xl mx-auto">
-            {/* Anonymous Verification */}
-            <Card className="bg-card/50 border">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg font-serif flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                  Student Verification
-                </CardTitle>
-                <CardDescription className="text-sm">
-                  {isAnonymousVerified 
-                    ? "You're verified! Your identity remains anonymous."
-                    : "Optional: Verify with TCU email for enhanced features"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isAnonymousVerified ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="text-sm font-medium">Anonymously Verified</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Your submissions are completely anonymous. No one can see your identity.
-                    </p>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full"
-                      onClick={() => {
-                        localStorage.removeItem('anonymousToken');
-                        setIsAnonymousVerified(false);
-                        toast({
-                          title: "Session Cleared",
-                          description: "Your anonymous session has been removed.",
-                        });
-                      }}
-                    >
-                      Clear Session
-                    </Button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleAnonymousVerification} className="space-y-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="email" className="text-sm">TCU Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="name@tcu.edu"
-                        value={anonymousEmail}
-                        onChange={(e) => setAnonymousEmail(e.target.value)}
-                        disabled={isVerifying}
-                        className="text-sm"
-                        data-testid="input-anonymous-email"
-                      />
-                    </div>
-                    <Button 
-                      type="submit" 
-                      disabled={isVerifying || !anonymousEmail.trim()} 
-                      className="w-full"
-                      size="sm"
-                      data-testid="button-verify-anonymous"
-                    >
-                      {isVerifying ? (
-                        <>Verifying...</>
-                      ) : (
-                        <>
-                          <Key className="h-4 w-4 mr-2" />
-                          Verify Anonymously
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      Your email is hashed immediately. We never store your identity.
-                    </p>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Quick Course Access */}
-            <Card className="bg-card/50 border">
+          {/* Course Access */}
+          <div className="flex justify-center mb-8 max-w-2xl mx-auto">
+            <Card className="bg-card/50 border w-full">
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg font-serif flex items-center gap-2">
                   <Search className="h-5 w-5 text-primary" />
-                  Quick Course Access
+                  Find Your Course
                 </CardTitle>
                 <CardDescription className="text-sm">
                   Enter your course code to jump directly to feedback submission
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleCourseCodeSubmit} className="flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder="e.g., CS101, MATH200"
-                    value={courseCode}
-                    onChange={(e) => setCourseCode(e.target.value)}
-                    className="flex-1"
-                    data-testid="input-course-code"
-                  />
-                  <Button type="submit" disabled={isLoading || !courseCode.trim()} data-testid="button-course-lookup">
-                    <ArrowRight className="h-4 w-4" />
+                <form onSubmit={handleCourseCodeSubmit} className="space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="courseCode" className="text-sm">Course Code</Label>
+                    <Input
+                      id="courseCode"
+                      type="text"
+                      placeholder="e.g., COSC 1337"
+                      value={courseCode}
+                      onChange={(e) => setCourseCode(e.target.value)}
+                      disabled={isLoading}
+                      className="text-sm"
+                      data-testid="input-course-code"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !courseCode.trim()} 
+                    className="w-full"
+                    size="sm"
+                    data-testid="button-find-course"
+                  >
+                    {isLoading ? (
+                      <>Finding Course...</>
+                    ) : (
+                      <>
+                        <ArrowRight className="h-4 w-4 mr-2" />
+                        Submit Feedback
+                      </>
+                    )}
                   </Button>
                 </form>
               </CardContent>
             </Card>
+
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">

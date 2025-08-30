@@ -24,7 +24,7 @@ const submissionSchema = z.object({
   difficultyLevel: z.enum(["slightly", "very", "completely"], {
     required_error: "Please select how confused you are",
   }),
-  createMagicLink: z.boolean().default(false),
+  sessionId: z.string().min(1, "Session ID is required"),
 });
 
 type SubmissionData = z.infer<typeof submissionSchema>;
@@ -48,7 +48,7 @@ export default function StudentSubmissionForm({ preselectedCourseId }: StudentSu
       topic: "",
       confusion: "",
       difficultyLevel: undefined,
-      createMagicLink: false,
+      sessionId: "",
     },
   });
 
@@ -66,32 +66,10 @@ export default function StudentSubmissionForm({ preselectedCourseId }: StudentSu
     mutationFn: async (data: SubmissionData) => {
       let magicLinkId: string | undefined;
       
-      // Create magic link if requested
-      if (data.createMagicLink) {
-        const magicLinkResponse = await apiRequest("POST", "/api/magic-links", {
-          token: "", // Will be generated on server
-        });
-        const magicLinkData = await magicLinkResponse.json();
-        magicLinkId = magicLinkData.id;
-        
-        // Show magic link to user
-        toast({
-          title: "Magic Link Created",
-          description: "Check your browser for your tracking link (in a real app, this would be emailed to you)",
-          duration: 10000,
-        });
-      }
+      // Anonymous submission - no magic link needed
 
       // Create submission
-      const submissionData: InsertSubmission = {
-        courseId: data.courseId,
-        topic: data.topic,
-        confusion: data.confusion,
-        difficultyLevel: data.difficultyLevel,
-        magicLinkId,
-      };
-
-      return await apiRequest("POST", "/api/submissions", submissionData);
+      return await apiRequest("POST", "/api/submissions", data);
     },
     onSuccess: () => {
       toast({
@@ -233,36 +211,6 @@ export default function StudentSubmissionForm({ preselectedCourseId }: StudentSu
               )}
             />
 
-            {/* Optional Magic Link */}
-            <div className="bg-muted rounded-lg p-4 border-l-4 border-accent">
-              <div className="flex items-start space-x-3">
-                <Wand2 className="text-accent mt-1 h-4 w-4" />
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-foreground mb-1">Optional: Track Your Submissions</h4>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Get a magic link to privately view your submission history. No signup required.
-                  </p>
-                  <FormField
-                    control={form.control}
-                    name="createMagicLink"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            data-testid="checkbox-magic-link"
-                          />
-                        </FormControl>
-                        <FormLabel className="text-sm font-normal">
-                          Send me a tracking link
-                        </FormLabel>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
 
             {/* Submit Button */}
             <Button
